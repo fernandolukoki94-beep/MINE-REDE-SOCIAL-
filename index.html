@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mini Rede Social</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    :root {
+      --bg-color: linear-gradient(135deg, #f2f2f2, #e0e0e0);
+      --header-bg: linear-gradient(135deg, #222, #444);
+      --card-bg: white;
+      --text-color: #333;
+      --shadow: rgba(0,0,0,0.1);
+      --button-bg: linear-gradient(135deg, #007bff, #0056b3);
+      --input-border: #ddd;
+    }
+    body.dark-mode {
+      --bg-color: linear-gradient(135deg, #333, #555);
+      --header-bg: linear-gradient(135deg, #111, #333);
+      --card-bg: #444;
+      --text-color: #eee;
+      --shadow: rgba(0,0,0,0.3);
+      --button-bg: linear-gradient(135deg, #0056b3, #003d7a);
+      --input-border: #666;
+    }
+    body { font-family: Arial, sans-serif; margin: 0; background: var(--bg-color); min-height: 100vh; color: var(--text-color); transition: background 0.3s, color 0.3s; }
+    header { background: var(--header-bg); color: white; padding: 15px; text-align: center; box-shadow: 0 2px 5px var(--shadow); display: flex; justify-content: space-between; align-items: center; }
+    .theme-toggle { background: none; border: none; color: white; font-size: 1.5em; cursor: pointer; }
+    .container { max-width: 95%; margin: 0 auto; padding: 20px; }
+
+    .post, .message {
+      background: var(--card-bg);
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px var(--shadow);
+      transition: transform 0.2s;
+      width: 100%;
+    }
+    .post:hover, .message:hover { transform: translateY(-2px); }
+
+    .post-header { display: flex; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+    .profile-pic { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; margin-right: 10px; }
+    .post-info { flex-grow: 1; min-width: 0; }
+    .post-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .timestamp { color: #666; font-size: 0.9em; }
+    body.dark-mode .timestamp { color: #ccc; }
+    .likes { display: flex; align-items: center; gap: 5px; }
+    .like-btn { background: #ff4757; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; transition: background 0.2s; font-size: 1em; }
+    .like-btn:hover { background: #ff3742; }
+    .delete-btn { background: #dc3545; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-size: 1em; }
+    .delete-btn:hover { background: #c82333; }
+
+    .post-content { margin-bottom: 10px; }
+    .post-image { max-width: 100%; border-radius: 8px; margin-top: 10px; }
+
+    .comments { margin-top: 15px; border-top: 1px solid var(--input-border); padding-top: 10px; }
+    .comment { background: var(--card-bg); padding: 8px; margin-bottom: 5px; border-radius: 5px; font-size: 0.9em; }
+    .comment-input { display: flex; gap: 5px; margin-top: 10px; flex-wrap: wrap; }
+    .comment-input input { flex-grow: 1; padding: 8px; border: 1px solid var(--input-border); border-radius: 3px; background: var(--card-bg); color: var(--text-color); min-width: 200px; }
+    .comment-input button { padding: 8px 12px; background: var(--button-bg); color: white; border: none; border-radius: 3px; cursor: pointer; }
+
+    input, textarea {
+      width: 100%;
+      padding: 12px;
+      margin-top: 5px;
+      border: 1px solid var(--input-border);
+      border-radius: 5px;
+      font-size: 1em;
+      background: var(--card-bg);
+      color: var(--text-color);
+      box-sizing: border-box;
+    }
+
+    button {
+      padding: 12px;
+      margin-top: 10px;
+      width: 100%;
+      background: var(--button-bg);
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 1.1em;
+      cursor: pointer;
+      transition: background 0.2s;
+      box-sizing: border-box;
+    }
+    button:hover { background: linear-gradient(135deg, #0056b3, #004085); }
+
+    h2 { color: var(--text-color); border-bottom: 2px solid #007bff; padding-bottom: 5px; }
+
+    .search-bar { margin-bottom: 20px; }
+    .search-bar input { width: 100%; }
+
+    #postList, #msgList { max-height: 400px; overflow-y: auto; }
+
+    .name-input-container { position: relative; }
+    .name-input-container::before { content: "👤"; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #666; }
+    #userName { padding-left: 35px; }
+
+    @media (max-width: 600px) {
+      .container { padding: 10px; }
+      .post, .message { padding: 10px; }
+      .profile-pic { width: 35px; height: 35px; }
+      button { padding: 15px; font-size: 1.2em; }
+      .like-btn, .delete-btn { padding: 10px; font-size: 1em; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
+    <h1>Mini Rede Social</h1>
+    <div></div> <!-- spacer -->
+  </header>
+  <div class="container">
+    <div class="search-bar">
+      <input id="searchInput" placeholder="Buscar posts..." oninput="filterPosts()" />
+    </div>
+
+    <h2>Configuração</h2>
+    <div class="name-input-container">
+      <input id="userName" placeholder="Seu nome (opcional)" value="" />
+    </div>
+    
+    <h2>Publicar Post</h2>
+    <textarea id="postText" placeholder="Escreva seu post..."></textarea>
+    <input id="postImage" placeholder="URL da imagem (opcional)" />
+    <button onclick="addPost()">Publicar</button>
+    <div id="postList"></div>
+
+    <h2>Mensagens</h2>
+    <input id="msgText" placeholder="Digite uma mensagem..." />
+    <button onclick="addMsg()">Enviar</button>
+    <div id="msgList"></div>
+
+    <h2>Opções</h2>
+    <button onclick="clearAll()">Limpar Todos os Dados</button>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
