@@ -7,6 +7,8 @@ function filterWords(text) {
     const regex = new RegExp(word, 'gi');
     filteredText = filteredText.replace(regex, '*'.repeat(word.length));
   });
+  // Highlight hashtags
+  filteredText = filteredText.replace(/#(\w+)/g, '<span class="hashtag" onclick="filterByHashtag(\'$1\')">#$1</span>');
   return filteredText;
 }
 
@@ -20,24 +22,48 @@ function getProfileColor(name) {
   return colors[Math.abs(hash) % colors.length];
 }
 
+// File to Base64 helper
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = error => reject(error);
+  });
+}
+
 function loadPosts(searchTerm = "") {
   const posts = JSON.parse(localStorage.getItem("posts") || "[]");
   const postList = document.getElementById("postList");
   
-  // Create a copy and reverse it to show newest first
-  const displayPosts = [...posts].reverse();
+  // Smart Feed Algorithm: score = likes * 2 + comments
+  const postsWithScore = posts.map((p, index) => ({
+    ...p,
+    originalIndex: index,
+    score: (p.likes || 0) * 2 + (p.comments || []).length
+  }));
+
+  // Sort by score descending, then by date (if score is equal)
+  postsWithScore.sort((a, b) => b.score - a.score || new Date(b.timestamp) - new Date(a.timestamp));
   
   let html = "";
-  displayPosts.forEach((p, reversedIndex) => {
-    // Calculate original index in the posts array
-    const originalIndex = posts.length - 1 - reversedIndex;
+  postsWithScore.forEach((p) => {
+    const originalIndex = p.originalIndex;
     
-    if (searchTerm && !p.text.toLowerCase().includes(searchTerm.toLowerCase()) && !p.author.toLowerCase().includes(searchTerm.toLowerCase())) {
+    // Search in text, author or hashtags
+    if (searchTerm && 
+        !p.text.toLowerCase().includes(searchTerm.toLowerCase()) && 
+        !p.author.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        !(p.text.toLowerCase().includes('#' + searchTerm.toLowerCase().replace('#', '')))) {
       return;
     }
 
     const profileColor = getProfileColor(p.author);
     const initial = (p.author || "A").charAt(0).toUpperCase();
+    const avatarHtml = p.avatar ? 
+      `<img src="${p.avatar}" class="profile-pic">` : 
+      `<div class="profile-pic" style="background-color: ${profileColor};">${initial}</div>`;
+    
     const imageHtml = p.image ? `<img src="${p.image}" alt="Post image" class="post-image" onerror="this.style.display='none'">` : '';
     
     const commentsHtml = (p.comments || []).map(c => `
@@ -49,7 +75,7 @@ function loadPosts(searchTerm = "") {
     html += `
       <div class="card post">
         <div class="post-header">
-          <div class="profile-pic" style="background-color: ${profileColor};">${initial}</div>
+          ${avatarHtml}
           <div class="post-info">
             <strong>${p.author || "Anônimo"}</strong>
             <span class="timestamp">${p.timestamp}</span>
@@ -86,29 +112,37 @@ function loadPosts(searchTerm = "") {
   postList.innerHTML = html;
 }
 
-function addPost() {
+async function addPost() {
   const textInput = document.getElementById("postText");
-  const imageInput = document.getElementById("postImage");
-  const nameInput = document.getElementById("userName");
+  const imageFileInput = document.getElementById("postImageFile");
+  const user = JSON.parse(localStorage.getItem("userProfile") || "{}");
   
   const text = textInput.value.trim();
-  const image = imageInput.value.trim();
+  let imageData = "";
   
   if (!text) {
     alert("Por favor, escreve algo antes de publicar.");
     return;
   }
 
-  const name = nameInput.value.trim() || "Anônimo";
+  if (imageFileInput.files && imageFileInput.files[0]) {
+    try {
+      imageData = await fileToBase64(imageFileInput.files[0]);
+    } catch (e) {
+      console.error("Error processing image", e);
+    }
+  }
+
   const posts = JSON.parse(localStorage.getItem("posts") || "[]");
   
   const newPost = {
     text: text,
-    author: name,
-    timestamp: new Date().toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    author: user.name || "Anônimo",
+    avatar: user.avatar || "",
+    timestamp: new Date().toLocaleString('pt-PT'),
     likes: 0,
     liked: false,
-    image: image,
+    image: imageData,
     comments: []
   };
   
@@ -116,10 +150,98 @@ function addPost() {
   localStorage.setItem("posts", JSON.stringify(posts));
 
   textInput.value = "";
-  imageInput.value = "";
+  imageFileInput.value = "";
   loadPosts();
 }
 
+function filterByHashtag(tag) {
+  document.getElementById("searchInput").value = tag;
+  loadPosts(tag);
+}
+
+// Profile Functions
+async function saveProfile() {
+  const name = document.getElementById("userName").value.trim();
+  const bio = document.getElementById("userBio").value.trim();
+  const avatarFile = document.getElementById("userAvatarFile").files[0];
+  
+  let avatarData = "";
+  const existingProfile = JSON.parse(localStorage.getItem("userProfile") || "{}");
+  avatarData = existingProfile.avatar || "";
+
+  if (avatarFile) {
+    avatarData = await fileToBase64(avatarFile);
+  }
+
+  const profile = {
+    name: name || "Anônimo",
+    bio: bio,
+    avatar: avatarData
+  };
+
+  localStorage.setItem("userProfile", JSON.stringify(profile));
+  updateProfileUI();
+  toggleEditProfile();
+}
+
+function updateProfileUI() {
+  const profile = JSON.parse(localStorage.getItem("userProfile") || "{}");
+  if (profile.name) {
+    document.getElementById("profileCard").style.display = "block";
+    document.getElementById("editProfileCard").style.display = "none";
+    document.getElementById("displayUserName").textContent = profile.name;
+    document.getElementById("displayUserBio").textContent = profile.bio || "Sem biografia";
+    
+    const avatarDisplay = document.getElementById("userAvatarDisplay");
+    if (profile.avatar) {
+      avatarDisplay.innerHTML = `<img src="${profile.avatar}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+      avatarDisplay.style.backgroundColor = "transparent";
+    } else {
+      avatarDisplay.textContent = profile.name.charAt(0).toUpperCase();
+      avatarDisplay.style.backgroundColor = getProfileColor(profile.name);
+    }
+
+    // Update inputs
+    document.getElementById("userName").value = profile.name;
+    document.getElementById("userBio").value = profile.bio || "";
+  } else {
+    document.getElementById("profileCard").style.display = "none";
+    document.getElementById("editProfileCard").style.display = "block";
+  }
+}
+
+function toggleEditProfile() {
+  const editCard = document.getElementById("editProfileCard");
+  const profileCard = document.getElementById("profileCard");
+  if (editCard.style.display === "none") {
+    editCard.style.display = "block";
+    profileCard.style.display = "none";
+  } else {
+    editCard.style.display = "none";
+    profileCard.style.display = "block";
+  }
+}
+
+// Data Export
+function exportData() {
+  const data = {
+    posts: JSON.parse(localStorage.getItem("posts") || "[]"),
+    msgs: JSON.parse(localStorage.getItem("msgs") || "[]"),
+    profile: JSON.parse(localStorage.getItem("userProfile") || "{}"),
+    exportDate: new Date().toISOString()
+  };
+  
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `social-app-data-${new Date().getTime()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+// Rest of existing functions (adapted)
 function toggleLike(index) {
   const posts = JSON.parse(localStorage.getItem("posts") || "[]");
   if (!posts[index]) return;
@@ -130,6 +252,8 @@ function toggleLike(index) {
   } else {
     posts[index].likes = (posts[index].likes || 0) + 1;
     posts[index].liked = true;
+    // Notify locally (simple console log for demo, could be a toast)
+    console.log("Notificação: Gostaste da publicação!");
   }
   
   localStorage.setItem("posts", JSON.stringify(posts));
@@ -148,17 +272,16 @@ function deletePost(index) {
 function addComment(postIndex) {
   const input = document.getElementById(`comment-input-${postIndex}`);
   const commentText = input.value.trim();
-  
   if (!commentText) return;
 
-  const name = document.getElementById("userName").value.trim() || "Anônimo";
+  const user = JSON.parse(localStorage.getItem("userProfile") || "{}");
   const posts = JSON.parse(localStorage.getItem("posts") || "[]");
   
   if (!posts[postIndex].comments) posts[postIndex].comments = [];
   
   posts[postIndex].comments.push({
     text: commentText,
-    author: name,
+    author: user.name || "Anônimo",
     timestamp: new Date().toISOString()
   });
   
@@ -168,9 +291,7 @@ function addComment(postIndex) {
 }
 
 function handleCommentKey(event, index) {
-  if (event.key === "Enter") {
-    addComment(index);
-  }
+  if (event.key === "Enter") addComment(index);
 }
 
 function focusComment(index) {
@@ -206,18 +327,16 @@ function addMsg() {
   const text = input.value.trim();
   if (!text) return;
 
-  const name = document.getElementById("userName").value.trim() || "Anônimo";
+  const user = JSON.parse(localStorage.getItem("userProfile") || "{}");
   const msgs = JSON.parse(localStorage.getItem("msgs") || "[]");
   
   msgs.push({
     text: text,
-    author: name,
+    author: user.name || "Anônimo",
     timestamp: new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })
   });
   
-  // Keep only last 20 messages
   if (msgs.length > 20) msgs.shift();
-  
   localStorage.setItem("msgs", JSON.stringify(msgs));
   input.value = "";
   loadMsgs();
@@ -236,28 +355,15 @@ function toggleTheme() {
 }
 
 function clearAll() {
-  if (confirm("ATENÇÃO: Isto irá apagar permanentemente todas as tuas publicações e mensagens. Continuar?")) {
-    localStorage.removeItem("posts");
-    localStorage.removeItem("msgs");
-    loadPosts();
-    loadMsgs();
+  if (confirm("ATENÇÃO: Isto irá apagar permanentemente todos os teus dados. Continuar?")) {
+    localStorage.clear();
+    location.reload();
   }
 }
 
-// Initialization
 window.onload = () => {
-  // Load saved name
-  const savedName = localStorage.getItem("userName");
-  if (savedName) {
-    document.getElementById("userName").value = savedName;
-  }
-
-  // Save name on change
-  document.getElementById("userName").addEventListener("input", (e) => {
-    localStorage.setItem("userName", e.target.value.trim());
-  });
-
-  // Load theme
+  updateProfileUI();
+  
   const savedTheme = localStorage.getItem('theme');
   if (savedTheme === 'dark') {
     document.body.classList.add('dark-mode');
@@ -267,7 +373,6 @@ window.onload = () => {
   loadPosts();
   loadMsgs();
 
-  // Register service worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(err => console.log("SW error:", err));
   }

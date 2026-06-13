@@ -287,3 +287,29 @@ textarea {
   header h1 { font-size: 1.2rem; }
   .container { padding: 0 10px; }
 }
+
+.hashtag {
+  color: var(--button-bg);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.hashtag:hover {
+  text-decoration: underline;
+}
+
+.profile-card h2 {
+  color: var(--text-color);
+  font-size: 1.2rem;
+}
+
+#editProfileCard {
+  border-left: 4px solid var(--button-bg);
+}
+
+input[type="file"] {
+  padding: 5px;
+  background: var(--bg-color);
+  border: 1px dashed var(--input-border);
+  cursor: pointer;
+}

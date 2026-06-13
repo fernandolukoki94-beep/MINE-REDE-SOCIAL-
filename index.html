@@ -18,13 +18,35 @@
       <input id="searchInput" placeholder="Pesquisar publicações..." oninput="filterPosts()" />
     </div>
 
+    <div class="card profile-card" id="profileCard" style="display: none;">
+      <div style="display: flex; align-items: center; gap: 15px;">
+        <div id="userAvatarDisplay" class="profile-pic" style="width: 60px; height: 60px; font-size: 1.5rem;"></div>
+        <div>
+          <h2 id="displayUserName" style="margin: 0;"></h2>
+          <p id="displayUserBio" style="margin: 5px 0 0; color: var(--text-secondary); font-size: 0.9rem;"></p>
+        </div>
+        <button class="action-btn" style="margin-left: auto; width: auto;" onclick="toggleEditProfile()">✏️ Editar</button>
+      </div>
+    </div>
+
+    <div class="card" id="editProfileCard">
+      <h2>O teu Perfil</h2>
+      <input id="userName" placeholder="O teu nome" />
+      <textarea id="userBio" placeholder="A tua biografia (ex: Programador Full Stack)"></textarea>
+      <div style="margin-bottom: 10px;">
+        <label style="font-size: 0.8rem; color: var(--text-secondary);">Foto de Perfil:</label>
+        <input type="file" id="userAvatarFile" accept="image/*" style="margin-top: 5px;" />
+      </div>
+      <button class="primary-btn" onclick="saveProfile()">Guardar Perfil</button>
+    </div>
+
     <div class="card publish-card">
       <h2>O que estás a pensar?</h2>
-      <div class="name-input-container" style="margin-bottom: 10px;">
-        <input id="userName" placeholder="O teu nome (opcional)" />
+      <textarea id="postText" placeholder="Escreve algo... (usa #hashtags para categorizar)"></textarea>
+      <div style="margin-bottom: 10px;">
+        <label style="font-size: 0.8rem; color: var(--text-secondary);">Adicionar Imagem:</label>
+        <input type="file" id="postImageFile" accept="image/*" style="margin-top: 5px;" />
       </div>
-      <textarea id="postText" placeholder="Escreve algo..."></textarea>
-      <input id="postImage" type="url" placeholder="URL da imagem (opcional)" />
       <button class="primary-btn" onclick="addPost()">Publicar</button>
     </div>
 
@@ -40,8 +62,11 @@
       </div>
     </div>
 
-    <div class="section-title">Configurações</div>
-    <button class="primary-btn danger-btn" onclick="clearAll()">Limpar Todos os Dados</button>
+    <div class="section-title">Configurações e Dados</div>
+    <div style="display: flex; gap: 10px;">
+      <button class="primary-btn" style="background-color: var(--accent-color);" onclick="exportData()">📥 Exportar JSON</button>
+      <button class="primary-btn danger-btn" style="margin-top: 0;" onclick="clearAll()">🗑️ Limpar Tudo</button>
+    </div>
   </div>
 
   <script src="app.js"></script>
