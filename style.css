@@ -313,3 +313,117 @@ input[type="file"] {
   border: 1px dashed var(--input-border);
   cursor: pointer;
 }
+
+.friend-item {
+  padding: 10px;
+  margin-bottom: 8px;
+  background-color: var(--bg-color);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.friend-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.friend-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.friend-details {
+  flex: 1;
+}
+
+.friend-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.friend-bio {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.friend-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.friend-btn {
+  padding: 5px 10px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+}
+
+.btn-add-friend {
+  background-color: var(--button-bg);
+  color: white;
+}
+
+.btn-add-friend:hover {
+  background-color: var(--button-hover);
+}
+
+.btn-accept {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.btn-accept:hover {
+  opacity: 0.8;
+}
+
+.btn-reject {
+  background-color: var(--danger-color);
+  color: white;
+}
+
+.btn-reject:hover {
+  opacity: 0.8;
+}
+
+.btn-remove {
+  background-color: var(--danger-color);
+  color: white;
+}
+
+.btn-remove:hover {
+  opacity: 0.8;
+}
+
+.no-results {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 20px;
+  font-size: 0.9rem;
+}
+
+.search-result-item {
+  padding: 12px;
+  margin-bottom: 10px;
+  background-color: var(--bg-color);
+  border-radius: 8px;
+  border-left: 3px solid var(--button-bg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}

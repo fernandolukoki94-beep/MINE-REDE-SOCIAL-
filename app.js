@@ -388,7 +388,7 @@ function addMsg() {
 
 function filterPosts() {
   const searchTerm = document.getElementById("searchInput").value;
-  loadPosts(searchTerm);
+  loadPostsWithFriends(searchTerm);
 }
 
 function toggleTheme() {
@@ -422,10 +422,412 @@ window.onload = () => {
     document.getElementById('themeBtn').textContent = '☀️';
   }
 
-  loadPosts();
+  loadPostsWithFriends();
   loadMsgs();
+  displayFriendRequests();
+  displayFriendsList();
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(err => console.log("SW error:", err));
   }
 };
+
+
+// ========== SISTEMA DE AMIGOS ==========
+
+function getFriendRequests() {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return [];
+  
+  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  const userIndex = users.findIndex(u => u.id === currentUser.id);
+  return userIndex !== -1 ? (users[userIndex].friendRequests || []) : [];
+}
+
+function getFriendsList() {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return [];
+  
+  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  const userIndex = users.findIndex(u => u.id === currentUser.id);
+  return userIndex !== -1 ? (users[userIndex].friends || []) : [];
+}
+
+function addFriendRequest(fromUserId, toUserId) {
+  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  const toUserIndex = users.findIndex(u => u.id === toUserId);
+  
+  if (toUserIndex === -1) return;
+  
+  if (!users[toUserIndex].friendRequests) {
+    users[toUserIndex].friendRequests = [];
+  }
+  
+  // Check if request already exists
+  if (!users[toUserIndex].friendRequests.includes(fromUserId)) {
+    users[toUserIndex].friendRequests.push(fromUserId);
+    localStorage.setItem("users", JSON.stringify(users));
+  }
+}
+
+function acceptFriendRequest(fromUserId) {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  
+  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  const currentUserIndex = users.findIndex(u => u.id === currentUser.id);
+  const fromUserIndex = users.findIndex(u => u.id === fromUserId);
+  
+  if (currentUserIndex === -1 || fromUserIndex === -1) return;
+  
+  // Initialize friends arrays if needed
+  if (!users[currentUserIndex].friends) users[currentUserIndex].friends = [];
+  if (!users[fromUserIndex].friends) users[fromUserIndex].friends = [];
+  
+  // Add to friends list
+  if (!users[currentUserIndex].friends.includes(fromUserId)) {
+    users[currentUserIndex].friends.push(fromUserId);
+  }
+  if (!users[fromUserIndex].friends.includes(currentUser.id)) {
+    users[fromUserIndex].friends.push(currentUser.id);
+  }
+  
+  // Remove from friend requests
+  if (!users[currentUserIndex].friendRequests) users[currentUserIndex].friendRequests = [];
+  users[currentUserIndex].friendRequests = users[currentUserIndex].friendRequests.filter(id => id !== fromUserId);
+  
+  localStorage.setItem("users", JSON.stringify(users));
+}
+
+function rejectFriendRequest(fromUserId) {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  
+  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  const currentUserIndex = users.findIndex(u => u.id === currentUser.id);
+  
+  if (currentUserIndex === -1) return;
+  
+  if (!users[currentUserIndex].friendRequests) users[currentUserIndex].friendRequests = [];
+  users[currentUserIndex].friendRequests = users[currentUserIndex].friendRequests.filter(id => id !== fromUserId);
+  
+  localStorage.setItem("users", JSON.stringify(users));
+}
+
+function removeFriend(friendId) {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  
+  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  const currentUserIndex = users.findIndex(u => u.id === currentUser.id);
+  const friendIndex = users.findIndex(u => u.id === friendId);
+  
+  if (currentUserIndex === -1 || friendIndex === -1) return;
+  
+  if (!users[currentUserIndex].friends) users[currentUserIndex].friends = [];
+  if (!users[friendIndex].friends) users[friendIndex].friends = [];
+  
+  // Remove from both friends lists
+  users[currentUserIndex].friends = users[currentUserIndex].friends.filter(id => id !== friendId);
+  users[friendIndex].friends = users[friendIndex].friends.filter(id => id !== currentUser.id);
+  
+  localStorage.setItem("users", JSON.stringify(users));
+}
+
+function sendFriendRequest(toUserId) {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  
+  const friends = getFriendsList();
+  if (friends.includes(toUserId)) {
+    alert("Já são amigos!");
+    return;
+  }
+  
+  addFriendRequest(currentUser.id, toUserId);
+  searchUsers(); // Refresh search results
+  alert("Pedido de amizade enviado!");
+}
+
+function searchUsers() {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  
+  const searchTerm = document.getElementById("searchUsersInput").value.toLowerCase().trim();
+  const resultsDiv = document.getElementById("searchResults");
+  
+  if (!searchTerm) {
+    resultsDiv.innerHTML = '<p class="no-results">Escreve um nome para procurar...</p>';
+    return;
+  }
+  
+  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  const friends = getFriendsList();
+  
+  const results = users.filter(u => 
+    u.id !== currentUser.id && 
+    u.username.toLowerCase().includes(searchTerm)
+  );
+  
+  if (results.length === 0) {
+    resultsDiv.innerHTML = '<p class="no-results">Nenhum utilizador encontrado.</p>';
+    return;
+  }
+  
+  resultsDiv.innerHTML = results.map(user => {
+    const isFriend = friends.includes(user.id);
+    const buttonText = isFriend ? "Já são amigos" : "Enviar Pedido";
+    const buttonDisabled = isFriend ? "disabled" : "";
+    
+    return `
+      <div class="search-result-item">
+        <div class="friend-info">
+          <div class="friend-avatar" style="background-color: ${getProfileColor(user.username)};">
+            ${user.username.charAt(0).toUpperCase()}
+          </div>
+          <div class="friend-details">
+            <div class="friend-name">${user.username}</div>
+            <div class="friend-bio">${user.bio || "Sem biografia"}</div>
+          </div>
+        </div>
+        <button class="friend-btn btn-add-friend" onclick="sendFriendRequest('${user.id}')" ${buttonDisabled}>
+          ${buttonText}
+        </button>
+      </div>
+    `;
+  }).join("");
+}
+
+function displayFriendRequests() {
+  const requests = getFriendRequests();
+  const requestsDiv = document.getElementById("friendRequests");
+  
+  if (requests.length === 0) {
+    requestsDiv.innerHTML = '<p class="no-results">Sem pedidos de amizade.</p>';
+    return;
+  }
+  
+  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  
+  requestsDiv.innerHTML = requests.map(fromUserId => {
+    const user = users.find(u => u.id === fromUserId);
+    if (!user) return "";
+    
+    return `
+      <div class="friend-item">
+        <div class="friend-info">
+          <div class="friend-avatar" style="background-color: ${getProfileColor(user.username)};">
+            ${user.username.charAt(0).toUpperCase()}
+          </div>
+          <div class="friend-details">
+            <div class="friend-name">${user.username}</div>
+            <div class="friend-bio">${user.bio || "Sem biografia"}</div>
+          </div>
+        </div>
+        <div class="friend-actions">
+          <button class="friend-btn btn-accept" onclick="acceptFriendRequest('${fromUserId}')">✓ Aceitar</button>
+          <button class="friend-btn btn-reject" onclick="rejectFriendRequest('${fromUserId}')">✗ Rejeitar</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function displayFriendsList() {
+  const friends = getFriendsList();
+  const friendsDiv = document.getElementById("friendsList");
+  
+  if (friends.length === 0) {
+    friendsDiv.innerHTML = '<p class="no-results">Ainda não tens amigos. Procura e envia pedidos!</p>';
+    return;
+  }
+  
+  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  
+  friendsDiv.innerHTML = friends.map(friendId => {
+    const user = users.find(u => u.id === friendId);
+    if (!user) return "";
+    
+    return `
+      <div class="friend-item">
+        <div class="friend-info">
+          <div class="friend-avatar" style="background-color: ${getProfileColor(user.username)};">
+            ${user.username.charAt(0).toUpperCase()}
+          </div>
+          <div class="friend-details">
+            <div class="friend-name">${user.username}</div>
+            <div class="friend-bio">${user.bio || "Sem biografia"}</div>
+          </div>
+        </div>
+        <button class="friend-btn btn-remove" onclick="removeFriend('${friendId}')">Remover</button>
+      </div>
+    `;
+  }).join("");
+}
+
+// Atualizar feed para mostrar publicações de amigos
+function loadPostsWithFriends(searchTerm = "") {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  
+  const friends = getFriendsList();
+  const allPosts = [];
+  
+  // Adicionar posts do utilizador atual
+  const myPosts = JSON.parse(localStorage.getItem(`posts_${currentUser.id}`) || "[]");
+  myPosts.forEach(post => {
+    allPosts.push({...post, userId: currentUser.id});
+  });
+  
+  // Adicionar posts dos amigos
+  friends.forEach(friendId => {
+    const friendPosts = JSON.parse(localStorage.getItem(`posts_${friendId}`) || "[]");
+    friendPosts.forEach(post => {
+      allPosts.push({...post, userId: friendId});
+    });
+  });
+  
+  const postList = document.getElementById("postList");
+  
+  // Smart Feed Algorithm
+  const postsWithScore = allPosts.map((p, index) => ({
+    ...p,
+    originalIndex: index,
+    score: (p.likes || 0) * 2 + (p.comments || []).length
+  }));
+
+  postsWithScore.sort((a, b) => b.score - a.score || new Date(b.timestamp) - new Date(a.timestamp));
+  
+  let html = "";
+  postsWithScore.forEach((p) => {
+    if (searchTerm && 
+        !p.text.toLowerCase().includes(searchTerm.toLowerCase()) && 
+        !p.author.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        !(p.text.toLowerCase().includes('#' + searchTerm.toLowerCase().replace('#', '')))) {
+      return;
+    }
+
+    const profileColor = getProfileColor(p.author);
+    const initial = (p.author || "A").charAt(0).toUpperCase();
+    const avatarHtml = p.avatar ? 
+      `<img src="${p.avatar}" class="profile-pic">` : 
+      `<div class="profile-pic" style="background-color: ${profileColor};">${initial}</div>`;
+    
+    const imageHtml = p.image ? `<img src="${p.image}" alt="Post image" class="post-image" onerror="this.style.display='none'">` : '';
+    
+    const commentsHtml = (p.comments || []).map(c => `
+      <div class="comment">
+        <strong>${c.author}:</strong> ${filterWords(c.text)}
+      </div>
+    `).join('');
+
+    const isOwnPost = p.userId === currentUser.id;
+    const deleteButton = isOwnPost ? `<button class="action-btn" onclick="deletePostFromFeed('${p.userId}', ${p.originalIndex})" title="Eliminar">🗑️</button>` : '';
+
+    html += `
+      <div class="card post">
+        <div class="post-header">
+          ${avatarHtml}
+          <div class="post-info">
+            <strong>${p.author || "Anônimo"}</strong>
+            <span class="timestamp">${p.timestamp}</span>
+          </div>
+          ${deleteButton}
+        </div>
+        <div class="post-content">${filterWords(p.text)}</div>
+        ${imageHtml}
+        <div class="post-footer">
+          <button class="action-btn ${p.liked ? 'liked' : ''}" onclick="toggleLikeFromFeed('${p.userId}', ${p.originalIndex})">
+            ${p.likes || 0} ❤️ Gosto
+          </button>
+          <button class="action-btn" onclick="focusCommentFromFeed('${p.userId}', ${p.originalIndex})">
+            💬 Comentar
+          </button>
+        </div>
+        <div class="comments-section">
+          ${commentsHtml}
+          <div class="comment-input-container">
+            <input type="text" placeholder="Escreve um comentário..." id="comment-input-${p.userId}-${p.originalIndex}" onkeypress="handleCommentKeyFromFeed(event, '${p.userId}', ${p.originalIndex})">
+            <button class="primary-btn" style="width: auto; padding: 5px 15px;" onclick="addCommentFromFeed('${p.userId}', ${p.originalIndex})">Postar</button>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  if (html === "" && searchTerm) {
+    html = `<p style="text-align: center; color: var(--text-secondary);">Nenhuma publicação encontrada para "${searchTerm}".</p>`;
+  } else if (html === "") {
+    html = `<p style="text-align: center; color: var(--text-secondary);">Ainda não há publicações. Procura amigos e segue-os!</p>`;
+  }
+
+  postList.innerHTML = html;
+}
+
+function toggleLikeFromFeed(userId, index) {
+  const posts = JSON.parse(localStorage.getItem(`posts_${userId}`) || "[]");
+  if (!posts[index]) return;
+  
+  if (posts[index].liked) {
+    posts[index].likes = (posts[index].likes || 1) - 1;
+    posts[index].liked = false;
+  } else {
+    posts[index].likes = (posts[index].likes || 0) + 1;
+    posts[index].liked = true;
+  }
+  
+  localStorage.setItem(`posts_${userId}`, JSON.stringify(posts));
+  loadPostsWithFriends(document.getElementById("searchInput").value);
+}
+
+function deletePostFromFeed(userId, index) {
+  const currentUser = getCurrentUser();
+  if (userId !== currentUser.id) {
+    alert("Não podes eliminar posts de outras pessoas!");
+    return;
+  }
+  
+  if (confirm("Tens a certeza que queres eliminar esta publicação?")) {
+    const posts = JSON.parse(localStorage.getItem(`posts_${userId}`) || "[]");
+    posts.splice(index, 1);
+    localStorage.setItem(`posts_${userId}`, JSON.stringify(posts));
+    loadPostsWithFriends(document.getElementById("searchInput").value);
+  }
+}
+
+function addCommentFromFeed(userId, postIndex) {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  
+  const input = document.getElementById(`comment-input-${userId}-${postIndex}`);
+  const commentText = input.value.trim();
+  if (!commentText) return;
+
+  const posts = JSON.parse(localStorage.getItem(`posts_${userId}`) || "[]");
+  
+  if (!posts[postIndex].comments) posts[postIndex].comments = [];
+  
+  posts[postIndex].comments.push({
+    text: commentText,
+    author: currentUser.username,
+    timestamp: new Date().toISOString()
+  });
+  
+  localStorage.setItem(`posts_${userId}`, JSON.stringify(posts));
+  input.value = "";
+  loadPostsWithFriends(document.getElementById("searchInput").value);
+}
+
+function handleCommentKeyFromFeed(event, userId, index) {
+  if (event.key === "Enter") addCommentFromFeed(userId, index);
+}
+
+function focusCommentFromFeed(userId, index) {
+  document.getElementById(`comment-input-${userId}-${index}`).focus();
+}
+
+// Atualizar filterPosts para usar o novo sistema
+function filterPostsWithFriends() {
+  const searchTerm = document.getElementById("searchInput").value;
+  loadPostsWithFriends(searchTerm);
+}

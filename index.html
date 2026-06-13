@@ -65,6 +65,26 @@
       </div>
     </div>
 
+    <div class="section-title">Amigos</div>
+    <div class="card">
+      <h3 style="margin-top: 0;">Procurar Utilizadores</h3>
+      <div style="display: flex; gap: 10px;">
+        <input id="searchUsersInput" placeholder="Procura por nome de utilizador..." style="flex: 1;" />
+        <button class="primary-btn" style="width: auto;" onclick="searchUsers()">Procurar</button>
+      </div>
+      <div id="searchResults" style="margin-top: 15px;"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top: 0;">Pedidos de Amizade 🔔</h3>
+      <div id="friendRequests" style="max-height: 250px; overflow-y: auto;"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top: 0;">Meus Amigos 👥</h3>
+      <div id="friendsList" style="max-height: 300px; overflow-y: auto;"></div>
+    </div>
+
     <div class="section-title">Configurações e Dados</div>
     <div style="display: flex; gap: 10px;">
       <button class="primary-btn" style="background-color: var(--accent-color);" onclick="exportData()">📥 Exportar JSON</button>
