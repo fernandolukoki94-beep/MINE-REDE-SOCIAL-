@@ -10,7 +10,10 @@
 <body>
   <header>
     <h1>Mini Rede Social</h1>
-    <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">🌙</button>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">🌙</button>
+      <button class="theme-toggle" onclick="logout()" title="Fazer Logout">🚪</button>
+    </div>
   </header>
 
   <div class="container">

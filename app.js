@@ -1,3 +1,29 @@
+// Autenticação
+function checkAuthentication() {
+  const currentUserId = localStorage.getItem("currentUserId");
+  if (!currentUserId) {
+    window.location.href = "auth.html";
+    return false;
+  }
+  return true;
+}
+
+function getCurrentUser() {
+  const currentUserId = localStorage.getItem("currentUserId");
+  if (!currentUserId) return null;
+  
+  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  return users.find(u => u.id === currentUserId);
+}
+
+function logout() {
+  if (confirm("Tens a certeza que queres fazer logout?")) {
+    localStorage.removeItem("currentUserId");
+    window.location.href = "auth.html";
+  }
+}
+
+// Filtro de palavras
 const badWords = ['merda', 'porra', 'caralho', 'palavrafeia1', 'palavrafeia2'];
 
 function filterWords(text) {
@@ -33,7 +59,10 @@ function fileToBase64(file) {
 }
 
 function loadPosts(searchTerm = "") {
-  const posts = JSON.parse(localStorage.getItem("posts") || "[]");
+  const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  
+  const posts = JSON.parse(localStorage.getItem(`posts_${currentUser.id}`) || "[]");
   const postList = document.getElementById("postList");
   
   // Smart Feed Algorithm: score = likes * 2 + comments
@@ -113,9 +142,11 @@ function loadPosts(searchTerm = "") {
 }
 
 async function addPost() {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  
   const textInput = document.getElementById("postText");
   const imageFileInput = document.getElementById("postImageFile");
-  const user = JSON.parse(localStorage.getItem("userProfile") || "{}");
   
   const text = textInput.value.trim();
   let imageData = "";
@@ -133,12 +164,12 @@ async function addPost() {
     }
   }
 
-  const posts = JSON.parse(localStorage.getItem("posts") || "[]");
+  const posts = JSON.parse(localStorage.getItem(`posts_${currentUser.id}`) || "[]");
   
   const newPost = {
     text: text,
-    author: user.name || "Anônimo",
-    avatar: user.avatar || "",
+    author: currentUser.username,
+    avatar: currentUser.avatar || "",
     timestamp: new Date().toLocaleString('pt-PT'),
     likes: 0,
     liked: false,
@@ -147,7 +178,7 @@ async function addPost() {
   };
   
   posts.push(newPost);
-  localStorage.setItem("posts", JSON.stringify(posts));
+  localStorage.setItem(`posts_${currentUser.id}`, JSON.stringify(posts));
 
   textInput.value = "";
   imageFileInput.value = "";
@@ -161,53 +192,51 @@ function filterByHashtag(tag) {
 
 // Profile Functions
 async function saveProfile() {
-  const name = document.getElementById("userName").value.trim();
+  const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  
   const bio = document.getElementById("userBio").value.trim();
   const avatarFile = document.getElementById("userAvatarFile").files[0];
   
-  let avatarData = "";
-  const existingProfile = JSON.parse(localStorage.getItem("userProfile") || "{}");
-  avatarData = existingProfile.avatar || "";
+  let avatarData = currentUser.avatar || "";
 
   if (avatarFile) {
     avatarData = await fileToBase64(avatarFile);
   }
 
-  const profile = {
-    name: name || "Anônimo",
-    bio: bio,
-    avatar: avatarData
-  };
+  // Update user in users array
+  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  const userIndex = users.findIndex(u => u.id === currentUser.id);
+  if (userIndex !== -1) {
+    users[userIndex].bio = bio;
+    users[userIndex].avatar = avatarData;
+    localStorage.setItem("users", JSON.stringify(users));
+  }
 
-  localStorage.setItem("userProfile", JSON.stringify(profile));
   updateProfileUI();
   toggleEditProfile();
 }
 
 function updateProfileUI() {
-  const profile = JSON.parse(localStorage.getItem("userProfile") || "{}");
-  if (profile.name) {
-    document.getElementById("profileCard").style.display = "block";
-    document.getElementById("editProfileCard").style.display = "none";
-    document.getElementById("displayUserName").textContent = profile.name;
-    document.getElementById("displayUserBio").textContent = profile.bio || "Sem biografia";
-    
-    const avatarDisplay = document.getElementById("userAvatarDisplay");
-    if (profile.avatar) {
-      avatarDisplay.innerHTML = `<img src="${profile.avatar}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
-      avatarDisplay.style.backgroundColor = "transparent";
-    } else {
-      avatarDisplay.textContent = profile.name.charAt(0).toUpperCase();
-      avatarDisplay.style.backgroundColor = getProfileColor(profile.name);
-    }
-
-    // Update inputs
-    document.getElementById("userName").value = profile.name;
-    document.getElementById("userBio").value = profile.bio || "";
+  const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  
+  document.getElementById("profileCard").style.display = "block";
+  document.getElementById("editProfileCard").style.display = "none";
+  document.getElementById("displayUserName").textContent = currentUser.username;
+  document.getElementById("displayUserBio").textContent = currentUser.bio || "Sem biografia";
+  
+  const avatarDisplay = document.getElementById("userAvatarDisplay");
+  if (currentUser.avatar) {
+    avatarDisplay.innerHTML = `<img src="${currentUser.avatar}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+    avatarDisplay.style.backgroundColor = "transparent";
   } else {
-    document.getElementById("profileCard").style.display = "none";
-    document.getElementById("editProfileCard").style.display = "block";
+    avatarDisplay.textContent = currentUser.username.charAt(0).toUpperCase();
+    avatarDisplay.style.backgroundColor = getProfileColor(currentUser.username);
   }
+
+  // Update inputs
+  document.getElementById("userBio").value = currentUser.bio || "";
 }
 
 function toggleEditProfile() {
@@ -224,10 +253,13 @@ function toggleEditProfile() {
 
 // Data Export
 function exportData() {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  
   const data = {
-    posts: JSON.parse(localStorage.getItem("posts") || "[]"),
-    msgs: JSON.parse(localStorage.getItem("msgs") || "[]"),
-    profile: JSON.parse(localStorage.getItem("userProfile") || "{}"),
+    user: currentUser.username,
+    posts: JSON.parse(localStorage.getItem(`posts_${currentUser.id}`) || "[]"),
+    msgs: JSON.parse(localStorage.getItem(`msgs_${currentUser.id}`) || "[]"),
     exportDate: new Date().toISOString()
   };
   
@@ -235,15 +267,18 @@ function exportData() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `social-app-data-${new Date().getTime()}.json`;
+  a.download = `social-app-data-${currentUser.username}-${new Date().getTime()}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
 }
 
-// Rest of existing functions (adapted)
+// Rest of existing functions
 function toggleLike(index) {
-  const posts = JSON.parse(localStorage.getItem("posts") || "[]");
+  const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  
+  const posts = JSON.parse(localStorage.getItem(`posts_${currentUser.id}`) || "[]");
   if (!posts[index]) return;
   
   if (posts[index].liked) {
@@ -252,40 +287,44 @@ function toggleLike(index) {
   } else {
     posts[index].likes = (posts[index].likes || 0) + 1;
     posts[index].liked = true;
-    // Notify locally (simple console log for demo, could be a toast)
     console.log("Notificação: Gostaste da publicação!");
   }
   
-  localStorage.setItem("posts", JSON.stringify(posts));
+  localStorage.setItem(`posts_${currentUser.id}`, JSON.stringify(posts));
   loadPosts(document.getElementById("searchInput").value);
 }
 
 function deletePost(index) {
   if (confirm("Tens a certeza que queres eliminar esta publicação?")) {
-    const posts = JSON.parse(localStorage.getItem("posts") || "[]");
+    const currentUser = getCurrentUser();
+    if (!currentUser) return;
+    
+    const posts = JSON.parse(localStorage.getItem(`posts_${currentUser.id}`) || "[]");
     posts.splice(index, 1);
-    localStorage.setItem("posts", JSON.stringify(posts));
+    localStorage.setItem(`posts_${currentUser.id}`, JSON.stringify(posts));
     loadPosts(document.getElementById("searchInput").value);
   }
 }
 
 function addComment(postIndex) {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  
   const input = document.getElementById(`comment-input-${postIndex}`);
   const commentText = input.value.trim();
   if (!commentText) return;
 
-  const user = JSON.parse(localStorage.getItem("userProfile") || "{}");
-  const posts = JSON.parse(localStorage.getItem("posts") || "[]");
+  const posts = JSON.parse(localStorage.getItem(`posts_${currentUser.id}`) || "[]");
   
   if (!posts[postIndex].comments) posts[postIndex].comments = [];
   
   posts[postIndex].comments.push({
     text: commentText,
-    author: user.name || "Anônimo",
+    author: currentUser.username,
     timestamp: new Date().toISOString()
   });
   
-  localStorage.setItem("posts", JSON.stringify(posts));
+  localStorage.setItem(`posts_${currentUser.id}`, JSON.stringify(posts));
   input.value = "";
   loadPosts(document.getElementById("searchInput").value);
 }
@@ -299,7 +338,10 @@ function focusComment(index) {
 }
 
 function loadMsgs() {
-  const msgs = JSON.parse(localStorage.getItem("msgs") || "[]");
+  const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  
+  const msgs = JSON.parse(localStorage.getItem(`msgs_${currentUser.id}`) || "[]");
   const msgList = document.getElementById("msgList");
   let html = "";
 
@@ -323,21 +365,23 @@ function loadMsgs() {
 }
 
 function addMsg() {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  
   const input = document.getElementById("msgText");
   const text = input.value.trim();
   if (!text) return;
 
-  const user = JSON.parse(localStorage.getItem("userProfile") || "{}");
-  const msgs = JSON.parse(localStorage.getItem("msgs") || "[]");
+  const msgs = JSON.parse(localStorage.getItem(`msgs_${currentUser.id}`) || "[]");
   
   msgs.push({
     text: text,
-    author: user.name || "Anônimo",
+    author: currentUser.username,
     timestamp: new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })
   });
   
   if (msgs.length > 20) msgs.shift();
-  localStorage.setItem("msgs", JSON.stringify(msgs));
+  localStorage.setItem(`msgs_${currentUser.id}`, JSON.stringify(msgs));
   input.value = "";
   loadMsgs();
 }
@@ -355,13 +399,21 @@ function toggleTheme() {
 }
 
 function clearAll() {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  
   if (confirm("ATENÇÃO: Isto irá apagar permanentemente todos os teus dados. Continuar?")) {
-    localStorage.clear();
-    location.reload();
+    localStorage.removeItem(`posts_${currentUser.id}`);
+    localStorage.removeItem(`msgs_${currentUser.id}`);
+    loadPosts();
+    loadMsgs();
   }
 }
 
 window.onload = () => {
+  // Check authentication
+  if (!checkAuthentication()) return;
+  
   updateProfileUI();
   
   const savedTheme = localStorage.getItem('theme');
