@@ -11,6 +11,7 @@ import Notifications from "./pages/Notifications";
 import Friends from "./pages/Friends";
 import Profile from "./pages/Profile";
 import DashboardLayout from "./components/DashboardLayout";
+import { SocketProvider } from "./contexts/SocketContext";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -44,8 +45,10 @@ function App() {
         switchable
       >
         <TooltipProvider>
-          <Toaster />
-          <Router />
+          <Toaster position="top-right" />
+          <SocketProvider>
+            <Router />
+          </SocketProvider>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

@@ -35,6 +35,7 @@ import {
   toggleLike,
   updateUserProfile,
 } from "./queries";
+import { emitToUser } from "./socket";
 
 // ========== POSTS ROUTER ==========
 
@@ -113,13 +114,21 @@ export const postsRouter = router({
           // Get post owner ID from database
           const postData = await (await import('./queries')).getPostById(input.postId);
           if (postData && postData.userId !== ctx.user.id) {
-            await createNotification(
+            const notification = await createNotification(
               postData.userId,
               "like",
               `${ctx.user.name} gostou do seu post`,
               ctx.user.id,
               input.postId
             );
+            if (notification) {
+              emitToUser(postData.userId, "notification", {
+                type: "like",
+                message: `${ctx.user.name} gostou do seu post`,
+                relatedUserId: ctx.user.id,
+                relatedPostId: input.postId,
+              });
+            }
           }
         }
 
@@ -159,13 +168,21 @@ export const postsRouter = router({
         // Create notification - notify post owner
         const postData = await (await import('./queries')).getPostById(input.postId);
         if (postData && postData.userId !== ctx.user.id) {
-          await createNotification(
+          const notification = await createNotification(
             postData.userId,
             "comment",
             `${ctx.user.name} comentou no seu post`,
             ctx.user.id,
             input.postId
           );
+          if (notification) {
+            emitToUser(postData.userId, "notification", {
+              type: "comment",
+              message: `${ctx.user.name} comentou no seu post`,
+              relatedUserId: ctx.user.id,
+              relatedPostId: input.postId,
+            });
+          }
         }
 
         return { success: true };
@@ -253,12 +270,19 @@ export const friendsRouter = router({
         await sendFriendRequest(ctx.user.id, input.toUserId);
 
         // Create notification
-        await createNotification(
+        const notification = await createNotification(
           input.toUserId,
           "friend_request",
           `${ctx.user.name} enviou um pedido de amizade`,
           ctx.user.id
         );
+        if (notification) {
+          emitToUser(input.toUserId, "notification", {
+            type: "friend_request",
+            message: `${ctx.user.name} enviou um pedido de amizade`,
+            relatedUserId: ctx.user.id,
+          });
+        }
 
         return { success: true };
       } catch (error) {
@@ -277,12 +301,19 @@ export const friendsRouter = router({
         await acceptFriendRequest(input.fromUserId, ctx.user.id);
 
         // Create notification
-        await createNotification(
+        const notification = await createNotification(
           input.fromUserId,
           "friend_accepted",
           `${ctx.user.name} aceitou seu pedido de amizade`,
           ctx.user.id
         );
+        if (notification) {
+          emitToUser(input.fromUserId, "notification", {
+            type: "friend_accepted",
+            message: `${ctx.user.name} aceitou seu pedido de amizade`,
+            relatedUserId: ctx.user.id,
+          });
+        }
 
         return { success: true };
       } catch (error) {
@@ -381,12 +412,27 @@ export const messagesRouter = router({
         const result = await sendDirectMessage(ctx.user.id, input.recipientId, input.text);
 
         // Create notification
-        await createNotification(
+        const notification = await createNotification(
           input.recipientId,
           "message",
           `${ctx.user.name} enviou uma mensagem`,
           ctx.user.id
         );
+        
+        // Emit socket events for message
+        emitToUser(input.recipientId, "new_message", {
+          senderId: ctx.user.id,
+          text: input.text,
+          createdAt: new Date().toISOString(),
+        });
+        
+        if (notification) {
+          emitToUser(input.recipientId, "notification", {
+            type: "message",
+            message: `${ctx.user.name} enviou uma mensagem`,
+            relatedUserId: ctx.user.id,
+          });
+        }
 
         return { success: true };
       } catch (error) {

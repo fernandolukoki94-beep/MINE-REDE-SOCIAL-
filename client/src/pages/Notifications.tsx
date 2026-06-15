@@ -3,11 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { Bell, Check, Heart, MessageCircle, UserPlus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSocket } from "@/contexts/SocketContext";
 
 export default function Notifications() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
+  const { socket } = useSocket();
   const [offset, setOffset] = useState(0);
 
   // Fetch notifications
@@ -23,6 +25,20 @@ export default function Notifications() {
       utils.notifications.unreadCount.invalidate();
     },
   });
+
+  // Listen for real-time notifications
+  useEffect(() => {
+    if (socket) {
+      const handleNotification = () => {
+        utils.notifications.list.invalidate();
+        utils.notifications.unreadCount.invalidate();
+      };
+      socket.on("notification", handleNotification);
+      return () => {
+        socket.off("notification", handleNotification);
+      };
+    }
+  }, [socket, utils]);
 
   const getNotificationIcon = (type: string) => {
     switch (type) {

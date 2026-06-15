@@ -7,10 +7,12 @@ import { trpc } from "@/lib/trpc";
 import { Heart, MessageCircle, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useInView } from "react-intersection-observer";
+import { useSocket } from "@/contexts/SocketContext";
 
 export default function Feed() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
+  const { socket } = useSocket();
   const [postText, setPostText] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isVideo, setIsVideo] = useState(false);
@@ -40,6 +42,21 @@ export default function Feed() {
       handleLoadMore();
     }
   }, [inView]);
+
+  // Listen for real-time notifications to refresh feed if needed
+  useEffect(() => {
+    if (socket) {
+      const handleNotification = (data: any) => {
+        if (data.type === "like" || data.type === "comment") {
+          utils.posts.feed.invalidate();
+        }
+      };
+      socket.on("notification", handleNotification);
+      return () => {
+        socket.off("notification", handleNotification);
+      };
+    }
+  }, [socket, utils]);
 
   // Create post mutation
   const createPostMutation = trpc.posts.create.useMutation({

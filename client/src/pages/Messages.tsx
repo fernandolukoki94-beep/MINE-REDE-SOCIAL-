@@ -5,10 +5,12 @@ import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { Send } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useSocket } from "@/contexts/SocketContext";
 
 export default function Messages() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
+  const { socket } = useSocket();
   const [selectedConversation, setSelectedConversation] = useState<number | null>(null);
   const [messageText, setMessageText] = useState("");
 
@@ -26,13 +28,32 @@ export default function Messages() {
 
   // Send message mutation
   const sendMessageMutation = trpc.messages.send.useMutation({
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       setMessageText("");
       // Refresh messages
-      utils.messages.history.invalidate();
+      utils.messages.history.invalidate({ otherUserId: variables.recipientId });
       utils.messages.conversations.invalidate();
     },
   });
+
+  // Listen for real-time messages
+  useEffect(() => {
+    if (socket) {
+      const handleNewMessage = (data: any) => {
+        // If the message is from the user we are currently chatting with
+        if (selectedConversation && data.senderId === selectedConversation) {
+          utils.messages.history.invalidate({ otherUserId: selectedConversation });
+        }
+        // Always refresh conversation list
+        utils.messages.conversations.invalidate();
+      };
+
+      socket.on("new_message", handleNewMessage);
+      return () => {
+        socket.off("new_message", handleNewMessage);
+      };
+    }
+  }, [socket, selectedConversation, utils]);
 
   const handleSendMessage = async () => {
     if (!messageText.trim() || !selectedConversation) return;
