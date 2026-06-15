@@ -1,8 +1,11 @@
-const CACHE_NAME = 'mini-rede-social-v1';
+const CACHE_NAME = 'mini-rede-social-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
+  './auth.html',
   './app.js',
+  './auth.js',
+  './utils.js',
   './style.css',
   './manifest.json'
 ];
@@ -18,6 +21,7 @@ self.addEventListener('install', (event) => {
     })
   );
   self.skipWaiting();
+  self.clients.claim();
 });
 
 // Activate event - clean up old caches

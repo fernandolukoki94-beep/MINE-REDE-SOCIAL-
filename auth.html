@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mini Rede Social - Autenticação</title>
   <link rel="stylesheet" href="style.css">
+  <script src="utils.js"></script>
   <style>
     .auth-container {
       max-width: 400px;
@@ -207,6 +208,11 @@
         <div class="error" id="registerPasswordError"></div>
       </div>
       <div class="form-group">
+        <label for="registerConfirmPassword">Confirmar Palavra-passe</label>
+        <input type="password" id="registerConfirmPassword" placeholder="Repete a palavra-passe" />
+        <div class="error" id="registerConfirmPasswordError"></div>
+      </div>
+      <div class="form-group">
         <label for="registerBio">Biografia (opcional)</label>
         <input type="text" id="registerBio" placeholder="Ex: Programador Full Stack" />
       </div>
@@ -246,6 +252,6 @@
     </div>
   </div>
 
-  <script src="auth.js"></script>
+  <script src="auth.js" defer></script>
 </body>
 </html>

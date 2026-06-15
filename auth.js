@@ -1,15 +1,9 @@
-// Autenticação e Gestão de Utilizadores
+/**
+ * Módulo de Autenticação
+ * Gestão de utilizadores com validações e segurança melhorada
+ */
 
-function getProfileColor(name) {
-  const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8'];
-  let hash = 0;
-  const str = name || "Anônimo";
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return colors[Math.abs(hash) % colors.length];
-}
-
+// Helpers de Armazenamento
 function getAllUsers() {
   return JSON.parse(localStorage.getItem("users") || "[]");
 }
@@ -34,6 +28,7 @@ function clearCurrentUser() {
   localStorage.removeItem("currentUserId");
 }
 
+// Validações
 function userExists(username) {
   const users = getAllUsers();
   return users.some(u => u.username.toLowerCase() === username.toLowerCase());
@@ -43,23 +38,33 @@ function validatePassword(password) {
   return password && password.length >= 6;
 }
 
+function validateUsername(username) {
+  // Apenas letras, números, underscore e hífen
+  const usernameRegex = /^[a-zA-Z0-9_-]{3,20}$/;
+  return usernameRegex.test(username);
+}
+
+// Registo
 function register() {
   const username = document.getElementById("registerUsername").value.trim();
   const password = document.getElementById("registerPassword").value;
+  const confirmPassword = document.getElementById("registerConfirmPassword")?.value || password;
   const bio = document.getElementById("registerBio").value.trim();
 
-  // Clear previous errors
+  // Limpar erros anteriores
   document.getElementById("registerUsernameError").textContent = "";
   document.getElementById("registerPasswordError").textContent = "";
+  document.getElementById("registerConfirmPasswordError").textContent = "";
 
-  // Validations
+  // Validações
   if (!username) {
     document.getElementById("registerUsernameError").textContent = "O nome de utilizador é obrigatório.";
     return;
   }
 
-  if (username.length < 3) {
-    document.getElementById("registerUsernameError").textContent = "O nome deve ter pelo menos 3 caracteres.";
+  if (!validateUsername(username)) {
+    document.getElementById("registerUsernameError").textContent = 
+      "Nome deve ter 3-20 caracteres (letras, números, _ ou -).";
     return;
   }
 
@@ -69,18 +74,34 @@ function register() {
   }
 
   if (!validatePassword(password)) {
-    document.getElementById("registerPasswordError").textContent = "A palavra-passe deve ter pelo menos 6 caracteres.";
+    document.getElementById("registerPasswordError").textContent = 
+      "A palavra-passe deve ter pelo menos 6 caracteres.";
     return;
   }
 
-  // Create new user
+  if (password !== confirmPassword) {
+    document.getElementById("registerConfirmPasswordError").textContent = 
+      "As palavras-passe não coincidem.";
+    return;
+  }
+
+  // Validar força da password
+  const strength = validatePasswordStrength(password);
+  if (!strength.isValid) {
+    document.getElementById("registerPasswordError").textContent = strength.message;
+    return;
+  }
+
+  // Criar novo utilizador
   const newUser = {
     id: Date.now().toString(),
     username: username,
-    password: password, // In production, this should be hashed!
-    bio: bio,
+    passwordHash: hashPassword(password),
+    bio: bio || "",
     avatar: "",
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    friends: [],
+    friendRequests: []
   };
 
   const users = getAllUsers();
@@ -89,14 +110,16 @@ function register() {
 
   // Auto-login
   setCurrentUser(newUser.id);
-  redirectToApp();
+  showNotification("Conta criada com sucesso!", "success");
+  setTimeout(() => redirectToApp(), 1000);
 }
 
+// Login
 function login() {
   const username = document.getElementById("loginUsername").value.trim();
   const password = document.getElementById("loginPassword").value;
 
-  // Clear previous errors
+  // Limpar erros anteriores
   document.getElementById("loginUsernameError").textContent = "";
   document.getElementById("loginPasswordError").textContent = "";
 
@@ -118,47 +141,57 @@ function login() {
     return;
   }
 
-  if (user.password !== password) {
+  // Comparar hash de password
+  const passwordHash = hashPassword(password);
+  if (user.passwordHash !== passwordHash) {
     document.getElementById("loginPasswordError").textContent = "Palavra-passe incorreta.";
     return;
   }
 
-  // Login successful
+  // Login bem-sucedido
   setCurrentUser(user.id);
-  redirectToApp();
+  showNotification("Login realizado com sucesso!", "success");
+  setTimeout(() => redirectToApp(), 1000);
 }
 
+// Alternar entre formulários
 function switchForm() {
   document.getElementById("registerForm").classList.toggle("active");
   document.getElementById("loginForm").classList.toggle("active");
   clearFormErrors();
 }
 
+// Limpar erros dos formulários
 function clearFormErrors() {
   document.getElementById("registerUsernameError").textContent = "";
   document.getElementById("registerPasswordError").textContent = "";
+  document.getElementById("registerConfirmPasswordError").textContent = "";
   document.getElementById("loginUsernameError").textContent = "";
   document.getElementById("loginPasswordError").textContent = "";
 }
 
+// Redirecionar para app
 function redirectToApp() {
   window.location.href = "index.html";
 }
 
+// Eliminar utilizador (com limpeza de dados)
 function deleteUser(userId) {
-  if (confirm("Tens a certeza que queres eliminar esta conta? Esta ação é irreversível.")) {
+  if (confirm("Tens a certeza que queres eliminar esta conta? Esta ação é irreversível e eliminará todos os teus dados.")) {
+    // Limpar dados do utilizador
+    cleanupUserData(userId);
+    
+    // Remover utilizador da lista
     let users = getAllUsers();
     users = users.filter(u => u.id !== userId);
     saveUsers(users);
+    
+    showNotification("Conta eliminada com sucesso.", "info");
     displayUsersList();
   }
 }
 
-function quickLogin(userId) {
-  setCurrentUser(userId);
-  redirectToApp();
-}
-
+// Mostrar lista de utilizadores registados
 function displayUsersList() {
   const users = getAllUsers();
   const container = document.getElementById("usersListContainer");
@@ -172,13 +205,15 @@ function displayUsersList() {
   listDiv.style.display = "block";
   container.innerHTML = users.map(user => `
     <div class="user-item">
-      <div class="user-info" onclick="quickLogin('${user.id}')">
+      <div class="user-info" style="cursor: pointer;" title="Clica para fazer login rápido (requer password)">
         <div class="user-avatar" style="background-color: ${getProfileColor(user.username)};">
           ${user.username.charAt(0).toUpperCase()}
         </div>
         <div>
-          <div class="user-name">${user.username}</div>
-          <div style="font-size: 0.8rem; color: var(--text-secondary);">${user.bio || "Sem biografia"}</div>
+          <div class="user-name">${sanitizeInput(user.username)}</div>
+          <div style="font-size: 0.8rem; color: var(--text-secondary);">
+            ${user.bio ? sanitizeInput(user.bio) : "Sem biografia"}
+          </div>
         </div>
       </div>
       <button class="delete-user" onclick="deleteUser('${user.id}')">Eliminar</button>
@@ -186,6 +221,7 @@ function displayUsersList() {
   `).join("");
 }
 
+// Alternar tema
 function toggleTheme() {
   document.body.classList.toggle('dark-mode');
   const isDark = document.body.classList.contains('dark-mode');
@@ -193,16 +229,16 @@ function toggleTheme() {
   document.getElementById('themeBtn').textContent = isDark ? '☀️' : '🌙';
 }
 
-// Initialize
+// Inicialização
 window.onload = () => {
-  // Load theme
+  // Carregar tema
   const savedTheme = localStorage.getItem('theme');
   if (savedTheme === 'dark') {
     document.body.classList.add('dark-mode');
     document.getElementById('themeBtn').textContent = '☀️';
   }
 
-  // Check if user is already logged in
+  // Verificar se utilizador já está autenticado
   const currentUser = getCurrentUser();
   if (currentUser) {
     redirectToApp();
@@ -210,12 +246,34 @@ window.onload = () => {
 
   displayUsersList();
 
-  // Allow Enter key to submit forms
+  // Permitir Enter para submeter formulários
   document.getElementById("registerPassword").addEventListener("keypress", (e) => {
-    if (e.key === "Enter") register();
+    if (e.key === "Enter") {
+      const confirmPasswordInput = document.getElementById("registerConfirmPassword");
+      if (confirmPasswordInput && confirmPasswordInput.value === "") {
+        confirmPasswordInput.focus();
+      } else {
+        register();
+      }
+    }
   });
 
   document.getElementById("loginPassword").addEventListener("keypress", (e) => {
     if (e.key === "Enter") login();
   });
+
+  // Mostrar força da password em tempo real
+  const registerPasswordInput = document.getElementById("registerPassword");
+  if (registerPasswordInput) {
+    registerPasswordInput.addEventListener("input", (e) => {
+      const strength = validatePasswordStrength(e.target.value);
+      const errorDiv = document.getElementById("registerPasswordError");
+      if (e.target.value.length > 0) {
+        errorDiv.textContent = strength.message;
+        errorDiv.style.color = strength.isValid ? '#42b72a' : '#f02849';
+      } else {
+        errorDiv.textContent = "";
+      }
+    });
+  }
 };
