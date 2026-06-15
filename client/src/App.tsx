@@ -9,20 +9,25 @@ import Feed from "./pages/Feed";
 import Messages from "./pages/Messages";
 import Notifications from "./pages/Notifications";
 import Friends from "./pages/Friends";
+import Profile from "./pages/Profile";
+import DashboardLayout from "./components/DashboardLayout";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
   return (
-    <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/feed"} component={Feed} />
-      <Route path={"/messages"} component={Messages} />
-      <Route path={"/notifications"} component={Notifications} />
-      <Route path={"/friends"} component={Friends} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
-      <Route component={NotFound} />
-    </Switch>
+    <DashboardLayout>
+      <Switch>
+        <Route path={"/"} component={Home} />
+        <Route path={"/feed"} component={Feed} />
+        <Route path={"/messages"} component={Messages} />
+        <Route path={"/notifications"} component={Notifications} />
+        <Route path={"/friends"} component={Friends} />
+        <Route path={"/profile"} component={Profile} />
+        <Route path={"/404"} component={NotFound} />
+        {/* Final fallback route */}
+        <Route component={NotFound} />
+      </Switch>
+    </DashboardLayout>
   );
 }
 
@@ -36,7 +41,7 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider
         defaultTheme="light"
-        // switchable
+        switchable
       >
         <TooltipProvider>
           <Toaster />

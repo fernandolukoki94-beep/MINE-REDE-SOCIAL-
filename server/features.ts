@@ -493,3 +493,31 @@ export const notificationsRouter = router({
     }
   }),
 });
+
+// ========== DATA MANAGEMENT ROUTER ==========
+
+export const dataRouter = router({
+  export: protectedProcedure.mutation(async ({ ctx }) => {
+    try {
+      const data = await (await import('./queries')).exportUserData(ctx.user.id);
+      return data;
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to export user data",
+      });
+    }
+  }),
+
+  clear: protectedProcedure.mutation(async ({ ctx }) => {
+    try {
+      await (await import('./queries')).clearUserData(ctx.user.id);
+      return { success: true };
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to clear user data",
+      });
+    }
+  }),
+});

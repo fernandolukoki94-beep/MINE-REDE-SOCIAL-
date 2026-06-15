@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 
 export default function Messages() {
   const { user } = useAuth();
+  const utils = trpc.useUtils();
   const [selectedConversation, setSelectedConversation] = useState<number | null>(null);
   const [messageText, setMessageText] = useState("");
 
@@ -28,8 +29,8 @@ export default function Messages() {
     onSuccess: () => {
       setMessageText("");
       // Refresh messages
-      trpc.useUtils().messages.history.invalidate();
-      trpc.useUtils().messages.conversations.invalidate();
+      utils.messages.history.invalidate();
+      utils.messages.conversations.invalidate();
     },
   });
 

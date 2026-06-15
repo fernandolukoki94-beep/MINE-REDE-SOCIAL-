@@ -7,6 +7,7 @@ import { useState } from "react";
 
 export default function Notifications() {
   const { user } = useAuth();
+  const utils = trpc.useUtils();
   const [offset, setOffset] = useState(0);
 
   // Fetch notifications
@@ -18,8 +19,8 @@ export default function Notifications() {
   // Mark as read mutation
   const markAsReadMutation = trpc.notifications.markAsRead.useMutation({
     onSuccess: () => {
-      trpc.useUtils().notifications.list.invalidate();
-      trpc.useUtils().notifications.unreadCount.invalidate();
+      utils.notifications.list.invalidate();
+      utils.notifications.unreadCount.invalidate();
     },
   });
 

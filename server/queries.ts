@@ -425,3 +425,53 @@ export async function getPostById(postId: number) {
   const result = await db.select().from(posts).where(eq(posts.id, postId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
+
+// ========== DATA MANAGEMENT QUERIES ==========
+
+export async function exportUserData(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  const profile = await getUserProfile(userId);
+  const userPosts = await db.select().from(posts).where(eq(posts.userId, userId));
+  const userComments = await db.select().from(comments).where(eq(comments.userId, userId));
+  const userLikes = await db.select().from(postLikes).where(eq(postLikes.userId, userId));
+  const userFriendships = await db.select().from(friendships).where(or(eq(friendships.userId, userId), eq(friendships.friendId, userId)));
+  const userMessages = await db.select().from(directMessages).where(or(eq(directMessages.senderId, userId), eq(directMessages.recipientId, userId)));
+
+  return {
+    user: user[0],
+    profile,
+    posts: userPosts,
+    comments: userComments,
+    likes: userLikes,
+    friendships: userFriendships,
+    messages: userMessages,
+    exportDate: new Date().toISOString()
+  };
+}
+
+export async function clearUserData(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  // Delete related data in order to respect constraints if any (though references() doesn't always enforce on sandbox)
+  await db.delete(notifications).where(eq(notifications.userId, userId));
+  await db.delete(directMessages).where(or(eq(directMessages.senderId, userId), eq(directMessages.recipientId, userId)));
+  await db.delete(friendships).where(or(eq(friendships.userId, userId), eq(friendships.friendId, userId)));
+  await db.delete(comments).where(eq(comments.userId, userId));
+  await db.delete(postLikes).where(eq(postLikes.userId, userId));
+  
+  // For posts, we need to delete their likes and comments first
+  const userPosts = await db.select({ id: posts.id }).from(posts).where(eq(posts.userId, userId));
+  const postIds = userPosts.map(p => p.id);
+  
+  if (postIds.length > 0) {
+    await db.delete(comments).where(inArray(comments.postId, postIds));
+    await db.delete(postLikes).where(inArray(postLikes.postId, postIds));
+    await db.delete(posts).where(eq(posts.userId, userId));
+  }
+
+  await db.delete(userProfiles).where(eq(userProfiles.userId, userId));
+}

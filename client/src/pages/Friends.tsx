@@ -4,11 +4,12 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { Check, Search, UserMinus, UserPlus, X } from "lucide-react";
+import { Check, Search, UserMinus, UserPlus, X, Bell } from "lucide-react";
 import { useState } from "react";
 
 export default function Friends() {
   const { user } = useAuth();
+  const utils = trpc.useUtils();
   const [searchQuery, setSearchQuery] = useState("");
 
   // Fetch friend requests
@@ -26,29 +27,29 @@ export default function Friends() {
   // Send friend request mutation
   const sendRequestMutation = trpc.friends.sendRequest.useMutation({
     onSuccess: () => {
-      trpc.useUtils().friends.search.invalidate();
+      utils.friends.search.invalidate();
     },
   });
 
   // Accept friend request mutation
   const acceptMutation = trpc.friends.accept.useMutation({
     onSuccess: () => {
-      trpc.useUtils().friends.requests.invalidate();
-      trpc.useUtils().friends.list.invalidate();
+      utils.friends.requests.invalidate();
+      utils.friends.list.invalidate();
     },
   });
 
   // Reject friend request mutation
   const rejectMutation = trpc.friends.reject.useMutation({
     onSuccess: () => {
-      trpc.useUtils().friends.requests.invalidate();
+      utils.friends.requests.invalidate();
     },
   });
 
   // Remove friend mutation
   const removeMutation = trpc.friends.remove.useMutation({
     onSuccess: () => {
-      trpc.useUtils().friends.list.invalidate();
+      utils.friends.list.invalidate();
     },
   });
 
@@ -181,5 +182,4 @@ export default function Friends() {
   );
 }
 
-// Import Bell icon
-import { Bell } from "lucide-react";
+
