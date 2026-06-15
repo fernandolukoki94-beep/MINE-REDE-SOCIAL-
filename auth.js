@@ -199,7 +199,7 @@ function displayUsersList() {
   listDiv.style.display = "block";
   container.innerHTML = users.map(user => `
     <div class="user-item">
-      <div class="user-info" style="cursor: pointer;" title="Clica para fazer login rápido (requer password)">
+      <div class="user-info" style="cursor: pointer;" title="Clica para fazer login rápido (requer password)" onclick="quickLogin('${user.username}')">
         <div class="user-avatar" style="background-color: ${getProfileColor(user.username)};">
           ${user.username.charAt(0).toUpperCase()}
         </div>
@@ -219,6 +219,15 @@ function displayUsersList() {
 function toggleTheme() {
   const isDark = toggleThemeLogic();
   document.getElementById('themeBtn').textContent = isDark ? '☀️' : '🌙';
+}
+
+// Login rápido
+function quickLogin(username) {
+  document.getElementById("loginUsername").value = username;
+  document.getElementById("loginPassword").focus();
+  if (document.getElementById("loginForm").style.display === "none" || !document.getElementById("loginForm").classList.contains("active")) {
+    switchForm();
+  }
 }
 
 // Inicialização

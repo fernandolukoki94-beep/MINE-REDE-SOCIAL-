@@ -111,8 +111,7 @@ export const postsRouter = router({
         // Create notification if liked - notify post owner
         if (result.liked) {
           // Get post owner ID from database
-          const post = await (await import('./queries')).getPostsWithFriends(ctx.user.id, 1, 0);
-          const postData = post.find((p: any) => p.id === input.postId);
+          const postData = await (await import('./queries')).getPostById(input.postId);
           if (postData && postData.userId !== ctx.user.id) {
             await createNotification(
               postData.userId,
@@ -158,8 +157,7 @@ export const postsRouter = router({
         const result = await addComment(input.postId, ctx.user.id, input.text);
 
         // Create notification - notify post owner
-        const post = await (await import('./queries')).getPostsWithFriends(ctx.user.id, 1, 0);
-        const postData = post.find((p: any) => p.id === input.postId);
+        const postData = await (await import('./queries')).getPostById(input.postId);
         if (postData && postData.userId !== ctx.user.id) {
           await createNotification(
             postData.userId,

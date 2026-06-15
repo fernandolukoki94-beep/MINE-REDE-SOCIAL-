@@ -417,3 +417,11 @@ export async function searchUsers(searchTerm: string, excludeUserId: number, lim
     .where(and(sql`LOWER(${users.name}) LIKE LOWER(${`%${searchTerm}%`})`, sql`${users.id} != ${excludeUserId}`))
     .limit(limit);
 }
+
+export async function getPostById(postId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(posts).where(eq(posts.id, postId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}

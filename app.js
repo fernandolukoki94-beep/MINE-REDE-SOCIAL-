@@ -46,7 +46,7 @@ function filterWords(text) {
 
 // ========== GESTÃO DE POSTS ==========
 
-function addPost() {
+async function addPost() {
   const currentUser = getCurrentUser();
   if (!currentUser) return;
   

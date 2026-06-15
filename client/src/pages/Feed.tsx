@@ -10,6 +10,7 @@ import { useInView } from "react-intersection-observer";
 
 export default function Feed() {
   const { user } = useAuth();
+  const utils = trpc.useUtils();
   const [postText, setPostText] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isVideo, setIsVideo] = useState(false);
@@ -49,7 +50,7 @@ export default function Feed() {
       setOffset(0);
       setPosts([]);
       // Invalidate feed query
-      trpc.useUtils().posts.feed.invalidate();
+      utils.posts.feed.invalidate();
     },
   });
 
@@ -59,7 +60,7 @@ export default function Feed() {
   // Like post mutation
   const likePostMutation = trpc.posts.like.useMutation({
     onSuccess: () => {
-      trpc.useUtils().posts.feed.invalidate();
+      utils.posts.feed.invalidate();
     },
   });
 
@@ -68,7 +69,7 @@ export default function Feed() {
     onSuccess: () => {
       setOffset(0);
       setPosts([]);
-      trpc.useUtils().posts.feed.invalidate();
+      utils.posts.feed.invalidate();
     },
   });
 
