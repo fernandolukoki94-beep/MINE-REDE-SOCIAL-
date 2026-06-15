@@ -12,13 +12,7 @@ function saveUsers(users) {
   localStorage.setItem("users", JSON.stringify(users));
 }
 
-function getCurrentUser() {
-  const currentUserId = localStorage.getItem("currentUserId");
-  if (!currentUserId) return null;
-  
-  const users = getAllUsers();
-  return users.find(u => u.id === currentUserId);
-}
+// getCurrentUser agora vem de utils.js
 
 function setCurrentUser(userId) {
   localStorage.setItem("currentUserId", userId);
@@ -223,9 +217,7 @@ function displayUsersList() {
 
 // Alternar tema
 function toggleTheme() {
-  document.body.classList.toggle('dark-mode');
-  const isDark = document.body.classList.contains('dark-mode');
-  localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  const isDark = toggleThemeLogic();
   document.getElementById('themeBtn').textContent = isDark ? '☀️' : '🌙';
 }
 
@@ -261,6 +253,11 @@ window.onload = () => {
   document.getElementById("loginPassword").addEventListener("keypress", (e) => {
     if (e.key === "Enter") login();
   });
+
+  // Registar Service Worker para PWA
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(err => console.log("SW error:", err));
+  }
 
   // Mostrar força da password em tempo real
   const registerPasswordInput = document.getElementById("registerPassword");

@@ -14,13 +14,7 @@ function checkAuthentication() {
   return true;
 }
 
-function getCurrentUser() {
-  const currentUserId = localStorage.getItem("currentUserId");
-  if (!currentUserId) return null;
-  
-  const users = JSON.parse(localStorage.getItem("users") || "[]");
-  return users.find(u => u.id === currentUserId);
-}
+// getCurrentUser agora vem de utils.js
 
 function logout() {
   if (confirm("Tens a certeza que queres fazer logout?")) {
@@ -89,15 +83,9 @@ function addPost() {
     }
 
     try {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        imageData = e.target.result;
-        savePost(currentUser, text, imageData);
-      };
-      reader.onerror = () => {
-        showNotification("Erro ao ler a imagem.", "error");
-      };
-      reader.readAsDataURL(file);
+      const base64 = await fileToBase64(file);
+      imageData = await resizeImage(base64);
+      savePost(currentUser, text, imageData);
       return;
     } catch (error) {
       showNotification("Erro ao processar a imagem.", "error");
@@ -421,9 +409,7 @@ function filterPosts() {
 // ========== TEMA ==========
 
 function toggleTheme() {
-  document.body.classList.toggle('dark-mode');
-  const isDark = document.body.classList.contains('dark-mode');
-  localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  const isDark = toggleThemeLogic();
   document.getElementById('themeBtn').textContent = isDark ? '☀️' : '🌙';
 }
 

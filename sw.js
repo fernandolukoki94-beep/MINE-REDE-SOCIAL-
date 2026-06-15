@@ -7,7 +7,11 @@ const ASSETS_TO_CACHE = [
   './auth.js',
   './utils.js',
   './style.css',
-  './manifest.json'
+  './manifest.json',
+  'https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white',
+  'https://img.shields.io/badge/CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white',
+  'https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black',
+  'https://img.shields.io/badge/PWA-5A0FC8?style=for-the-badge&logo=pwa&logoColor=white'
 ];
 
 // Install event - cache essential assets
@@ -56,7 +60,7 @@ self.addEventListener('fetch', (event) => {
           return response;
         }
         return fetch(request).then((response) => {
-          if (!response || response.status !== 200 || response.type === 'error') {
+          if (!response || response.status !== 200) {
             return response;
           }
           const responseToCache = response.clone();
@@ -65,7 +69,10 @@ self.addEventListener('fetch', (event) => {
           });
           return response;
         }).catch(() => {
-          return caches.match(request);
+          if (request.mode === 'navigate') {
+            return caches.match('./index.html') || caches.match('./auth.html');
+          }
+          return null;
         });
       })
     );
