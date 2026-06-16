@@ -40,7 +40,7 @@ function filterWords(text) {
   });
   
   // Destacar hashtags
-  filteredText = filteredText.replace(/#(\w+)/g, '<span class="hashtag" onclick="filterByHashtag(\'$1\')">#$1</span>');
+  filteredText = filteredText.replace(/#(\w+)/g, '<span class="hashtag" data-hashtag="$1">#$1</span>');
   return filteredText;
 }
 
@@ -575,9 +575,9 @@ function searchUsers() {
             <div class="friend-bio">${sanitizeInput(user.bio || "Sem biografia")}</div>
           </div>
         </div>
-        <button class="friend-btn btn-add-friend" onclick="sendFriendRequest('${user.id}')" ${buttonDisabled}>
-          ${buttonText}
-        </button>
+<button class="friend-btn btn-add-friend" data-user-id="${user.id}" ${buttonDisabled}>
+	          ${buttonText}
+	        </button>
       </div>
     `;
   }).join("");
@@ -609,10 +609,10 @@ function displayFriendRequests() {
             <div class="friend-bio">${sanitizeInput(user.bio || "Sem biografia")}</div>
           </div>
         </div>
-        <div class="friend-actions">
-          <button class="friend-btn btn-accept" onclick="acceptFriendRequest('${fromUserId}')">✓ Aceitar</button>
-          <button class="friend-btn btn-reject" onclick="rejectFriendRequest('${fromUserId}')">✗ Rejeitar</button>
-        </div>
+<div class="friend-actions">
+	          <button class="friend-btn btn-accept" data-from-user-id="${fromUserId}">✓ Aceitar</button>
+	          <button class="friend-btn btn-reject" data-from-user-id="${fromUserId}">✗ Rejeitar</button>
+	        </div>
       </div>
     `;
   }).join("");
@@ -644,7 +644,7 @@ function displayFriendsList() {
             <div class="friend-bio">${sanitizeInput(user.bio || "Sem biografia")}</div>
           </div>
         </div>
-        <button class="friend-btn btn-remove" onclick="removeFriend('${friendId}')">Remover</button>
+        <button class="friend-btn btn-remove" data-friend-id="${friendId}">Remover</button>
       </div>
     `;
   }).join("");
@@ -717,7 +717,7 @@ function loadPostsWithFriends(searchTerm = "") {
     `).join('');
 
     const isOwnPost = p.userId === currentUser.id;
-    const deleteButton = isOwnPost ? `<button class="action-btn" onclick="deletePost('${p.userId}', '${p.id}')" title="Eliminar">🗑️</button>` : '';
+    const deleteButton = isOwnPost ? `<button class="action-btn btn-delete-post" data-user-id="${p.userId}" data-post-id="${p.id}" title="Eliminar">🗑️</button>` : '';
     
     const isLiked = (p.likedBy || []).includes(currentUser.id);
 
@@ -734,18 +734,18 @@ function loadPostsWithFriends(searchTerm = "") {
         <div class="post-content">${filterWords(p.text)}</div>
         ${imageHtml}
         <div class="post-footer">
-          <button class="action-btn ${isLiked ? 'liked' : ''}" onclick="toggleLikeFromFeed('${p.userId}', '${p.id}')">
-            ${p.likes || 0} ❤️ Gosto
-          </button>
-          <button class="action-btn" onclick="focusCommentFromFeed('${p.userId}', '${p.id}')">
-            ${(p.comments || []).length} 💬 Comentar
-          </button>
+<button class="action-btn btn-like ${isLiked ? 'liked' : ''}" data-user-id="${p.userId}" data-post-id="${p.id}">
+	            ${p.likes || 0} ❤️ Gosto
+	          </button>
+	          <button class="action-btn btn-focus-comment" data-user-id="${p.userId}" data-post-id="${p.id}">
+	            ${(p.comments || []).length} 💬 Comentar
+	          </button>
         </div>
         <div class="comments-section">
           ${commentsHtml}
           <div class="comment-input-container">
-            <input type="text" placeholder="Escreve um comentário..." id="comment-input-${p.userId}-${p.id}" onkeypress="handleCommentKeyFromFeed(event, '${p.userId}', '${p.id}')">
-            <button class="primary-btn" style="width: auto; padding: 5px 15px;" onclick="addCommentFromFeed('${p.userId}', '${p.id}')">Postar</button>
+<input type="text" placeholder="Escreve um comentário..." id="comment-input-${p.userId}-${p.id}" class="comment-input" data-user-id="${p.userId}" data-post-id="${p.id}">
+	            <button class="primary-btn btn-add-comment" style="width: auto; padding: 5px 15px;" data-user-id="${p.userId}" data-post-id="${p.id}">Postar</button>
           </div>
         </div>
       </div>
@@ -774,9 +774,88 @@ function fileToBase64(file) {
 
 // ========== INICIALIZAÇÃO ==========
 
+function initEventListeners() {
+  // Botões estáticos
+  document.getElementById('themeBtn')?.addEventListener('click', toggleTheme);
+  document.getElementById('logoutBtn')?.addEventListener('click', logout);
+  document.getElementById('searchInput')?.addEventListener('input', filterPosts);
+  document.getElementById('editProfileBtn')?.addEventListener('click', toggleEditProfile);
+  document.getElementById('saveProfileBtn')?.addEventListener('click', saveProfile);
+  document.getElementById('addPostBtn')?.addEventListener('click', addPost);
+  document.getElementById('sendMsgBtn')?.addEventListener('click', addMsg);
+  document.getElementById('searchUsersBtn')?.addEventListener('click', searchUsers);
+  document.getElementById('exportDataBtn')?.addEventListener('click', exportData);
+  document.getElementById('clearAllBtn')?.addEventListener('click', clearAll);
+
+  // Event Delegation (usando helper de fixes.js)
+  addEventDelegation('.hashtag', 'click', (e, target) => {
+    const tag = target.dataset.hashtag;
+    if (tag) filterByHashtag(tag);
+  });
+
+  addEventDelegation('.btn-add-friend', 'click', (e, target) => {
+    const userId = target.dataset.userId;
+    if (userId) sendFriendRequest(userId);
+  });
+
+  addEventDelegation('.btn-accept', 'click', (e, target) => {
+    const fromUserId = target.dataset.fromUserId;
+    if (fromUserId) acceptFriendRequest(fromUserId);
+  });
+
+  addEventDelegation('.btn-reject', 'click', (e, target) => {
+    const fromUserId = target.dataset.fromUserId;
+    if (fromUserId) rejectFriendRequest(fromUserId);
+  });
+
+  addEventDelegation('.btn-remove', 'click', (e, target) => {
+    const friendId = target.dataset.friendId;
+    if (friendId) removeFriend(friendId);
+  });
+
+  addEventDelegation('.btn-delete-post', 'click', (e, target) => {
+    const userId = target.dataset.userId;
+    const postId = target.dataset.postId;
+    if (userId && postId) deletePost(userId, postId);
+  });
+
+  addEventDelegation('.btn-like', 'click', (e, target) => {
+    const userId = target.dataset.userId;
+    const postId = target.dataset.postId;
+    if (userId && postId) toggleLikeFromFeed(userId, postId);
+  });
+
+  addEventDelegation('.btn-focus-comment', 'click', (e, target) => {
+    const userId = target.dataset.userId;
+    const postId = target.dataset.postId;
+    if (userId && postId) focusCommentFromFeed(userId, postId);
+  });
+
+  addEventDelegation('.btn-add-comment', 'click', (e, target) => {
+    const userId = target.dataset.userId;
+    const postId = target.dataset.postId;
+    if (userId && postId) addCommentFromFeed(userId, postId);
+  });
+
+  // Evento de teclado para comentários
+  addEventDelegation('.comment-input', 'keypress', (e, target) => {
+    if (e.key === 'Enter') {
+      const userId = target.dataset.userId;
+      const postId = target.dataset.postId;
+      if (userId && postId) {
+        e.preventDefault();
+        addCommentFromFeed(userId, postId);
+      }
+    }
+  });
+}
+
 window.onload = () => {
   // Verificar autenticação
   if (!checkAuthentication()) return;
+  
+  // Inicializar listeners
+  initEventListeners();
   
   updateProfileUI();
   

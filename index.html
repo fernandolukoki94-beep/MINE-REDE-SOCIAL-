@@ -7,19 +7,20 @@
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="style.css">
   <script src="utils.js"></script>
+  <script src="fixes.js"></script>
 </head>
 <body>
   <header>
     <h1>Mini Rede Social</h1>
     <div style="display: flex; align-items: center; gap: 10px;">
-      <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">🌙</button>
-      <button class="theme-toggle" onclick="logout()" title="Fazer Logout">🚪</button>
+      <button class="theme-toggle" id="themeBtn">🌙</button>
+      <button class="theme-toggle" id="logoutBtn" title="Fazer Logout">🚪</button>
     </div>
   </header>
 
   <div class="container">
     <div class="search-bar">
-      <input id="searchInput" placeholder="Pesquisar publicações..." oninput="filterPosts()" />
+      <input id="searchInput" placeholder="Pesquisar publicações..." />
     </div>
 
     <div class="card profile-card" id="profileCard" style="display: none;">
@@ -29,7 +30,7 @@
           <h2 id="displayUserName" style="margin: 0;"></h2>
           <p id="displayUserBio" style="margin: 5px 0 0; color: var(--text-secondary); font-size: 0.9rem;"></p>
         </div>
-        <button class="action-btn" style="margin-left: auto; width: auto;" onclick="toggleEditProfile()">✏️ Editar</button>
+        <button class="action-btn" style="margin-left: auto; width: auto;" id="editProfileBtn">✏️ Editar</button>
       </div>
     </div>
 
@@ -41,7 +42,7 @@
         <label style="font-size: 0.8rem; color: var(--text-secondary);">Foto de Perfil:</label>
         <input type="file" id="userAvatarFile" accept="image/*" style="margin-top: 5px;" />
       </div>
-      <button class="primary-btn" onclick="saveProfile()">Guardar Perfil</button>
+      <button class="primary-btn" id="saveProfileBtn">Guardar Perfil</button>
     </div>
 
     <div class="card publish-card">
@@ -51,7 +52,7 @@
         <label style="font-size: 0.8rem; color: var(--text-secondary);">Adicionar Imagem:</label>
         <input type="file" id="postImageFile" accept="image/*" style="margin-top: 5px;" />
       </div>
-      <button class="primary-btn" onclick="addPost()">Publicar</button>
+      <button class="primary-btn" id="addPostBtn">Publicar</button>
     </div>
 
     <div class="section-title">Publicações</div>
@@ -62,7 +63,7 @@
       <div id="msgList"></div>
       <div class="comment-input-container" style="margin-top: 15px;">
         <input id="msgText" placeholder="Escreve uma mensagem..." />
-        <button class="primary-btn" style="width: auto;" onclick="addMsg()">Enviar</button>
+        <button class="primary-btn" style="width: auto;" id="sendMsgBtn">Enviar</button>
       </div>
     </div>
 
@@ -71,7 +72,7 @@
       <h3 style="margin-top: 0;">Procurar Utilizadores</h3>
       <div style="display: flex; gap: 10px;">
         <input id="searchUsersInput" placeholder="Procura por nome de utilizador..." style="flex: 1;" />
-        <button class="primary-btn" style="width: auto;" onclick="searchUsers()">Procurar</button>
+        <button class="primary-btn" style="width: auto;" id="searchUsersBtn">Procurar</button>
       </div>
       <div id="searchResults" style="margin-top: 15px;"></div>
     </div>
@@ -88,8 +89,8 @@
 
     <div class="section-title">Configurações e Dados</div>
     <div style="display: flex; gap: 10px;">
-      <button class="primary-btn" style="background-color: var(--accent-color);" onclick="exportData()">📥 Exportar JSON</button>
-      <button class="primary-btn danger-btn" style="margin-top: 0;" onclick="clearAll()">🗑️ Limpar Tudo</button>
+      <button class="primary-btn" style="background-color: var(--accent-color);" id="exportDataBtn">📥 Exportar JSON</button>
+      <button class="primary-btn danger-btn" style="margin-top: 0;" id="clearAllBtn">🗑️ Limpar Tudo</button>
     </div>
   </div>
 

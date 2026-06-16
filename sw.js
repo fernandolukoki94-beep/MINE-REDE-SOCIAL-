@@ -6,6 +6,7 @@ const ASSETS_TO_CACHE = [
   './app.js',
   './auth.js',
   './utils.js',
+  './fixes.js',
   './style.css',
   './manifest.json',
   'https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white',
