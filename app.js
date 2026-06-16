@@ -60,8 +60,8 @@ async function addPost() {
     return;
   }
 
-  if (text.length > 5000) {
-    showNotification("A publicação não pode ter mais de 5000 caracteres.", "warning");
+  if (text.length > 500) {
+    showNotification("A publicação não pode ter mais de 500 caracteres.", "warning");
     return;
   }
 
@@ -76,9 +76,9 @@ async function addPost() {
       return;
     }
     
-    // Validar tamanho (máx 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      showNotification("A imagem não pode ter mais de 5MB.", "error");
+    // Validar tamanho (máx 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      showNotification("A imagem não pode ter mais de 2MB.", "error");
       return;
     }
 
@@ -168,8 +168,8 @@ async function saveProfile() {
       return;
     }
     
-    if (avatarFile.size > 2 * 1024 * 1024) {
-      showNotification("A imagem não pode ter mais de 2MB.", "error");
+    if (avatarFile.size > 500 * 1024) {
+      showNotification("A imagem não pode ter mais de 500KB.", "error");
       return;
     }
 
@@ -344,8 +344,8 @@ function loadMsgs() {
   const msgList = document.getElementById("msgList");
   let html = "";
 
-  // Mostrar últimas 20 mensagens
-  const recentMsgs = msgs.slice(-20);
+  // Mostrar últimas 50 mensagens
+  const recentMsgs = msgs.slice(-50);
   
   recentMsgs.forEach(m => {
     html += `
@@ -391,8 +391,8 @@ function addMsg() {
     timestamp: new Date().toISOString()
   });
   
-  // Manter apenas as últimas 100 mensagens
-  if (msgs.length > 100) msgs.shift();
+  // Manter apenas as últimas 1000 mensagens
+  if (msgs.length > 1000) msgs.shift();
   
   localStorage.setItem(`msgs_${currentUser.id}`, JSON.stringify(msgs));
   input.value = "";
@@ -681,7 +681,13 @@ function loadPostsWithFriends(searchTerm = "") {
     score: (p.likes || 0) * 2 + (p.comments || []).length
   }));
 
-  postsWithScore.sort((a, b) => b.score - a.score || new Date(b.timestamp) - new Date(a.timestamp));
+  postsWithScore.sort((a, b) => {
+    const scoreDiff = b.score - a.score;
+    if (scoreDiff !== 0) return scoreDiff;
+    const timeA = new Date(a.timestamp).getTime();
+    const timeB = new Date(b.timestamp).getTime();
+    return timeB - timeA;
+  });
   
   let html = "";
   postsWithScore.forEach((p) => {
@@ -699,7 +705,10 @@ function loadPostsWithFriends(searchTerm = "") {
       `<img src="${p.avatar}" class="profile-pic" alt="Avatar">` : 
       `<div class="profile-pic" style="background-color: ${profileColor};">${initial}</div>`;
     
-    const imageHtml = p.image ? `<img src="${p.image}" alt="Post image" class="post-image" onerror="this.style.display='none'">` : '';
+    const MAX_IMAGE_DATA_SIZE = 1024 * 1024;
+  const imageHtml = p.image && p.image.length < MAX_IMAGE_DATA_SIZE 
+    ? `<img src="${p.image}" alt="Post image" class="post-image" loading="lazy" onerror="this.style.display='none'">` 
+    : '';
     
     const commentsHtml = (p.comments || []).map(c => `
       <div class="comment">
