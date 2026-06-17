@@ -58,16 +58,16 @@ export async function getPostsWithFriends(userId: number, limit: number = 20, of
       ...getTableColumns(posts),
       userName: users.name,
       userEmail: users.email,
-      commentCount: count(comments.id),
-      likeCount: count(postLikes.id),
+      commentCount: count(sql`DISTINCT ${comments.id}`),
+      likeCount: count(sql`DISTINCT ${postLikes.id}`),
     })
     .from(posts)
     .leftJoin(users, eq(posts.userId, users.id))
     .leftJoin(comments, eq(posts.id, comments.postId))
     .leftJoin(postLikes, eq(posts.id, postLikes.postId))
     .where(inArray(posts.userId, userIds))
-    .groupBy(posts.id)
-    .orderBy(desc(sql`(${posts.likes} * 2 + COUNT(DISTINCT ${comments.id}))`), desc(posts.createdAt))
+    .groupBy(posts.id, users.name, users.email)
+    .orderBy(desc(sql`(${count(sql`DISTINCT ${postLikes.id}`)} * 2 + ${count(sql`DISTINCT ${comments.id}`)})`), desc(posts.createdAt))
     .limit(limit)
     .offset(offset);
 
@@ -155,13 +155,18 @@ export async function getPostComments(postId: number) {
 
 export async function sendFriendRequest(fromId: number, toId: number) {
   const db = await getDb();
-  if (!db) return;
+  if (!db || fromId === toId) return;
 
-  // Check if already friends or request exists
+  // Check if any friendship record exists (pending or accepted) in either direction
   const existing = await db
     .select()
     .from(friendships)
-    .where(and(eq(friendships.userId, toId), eq(friendships.friendId, fromId)))
+    .where(
+      or(
+        and(eq(friendships.userId, toId), eq(friendships.friendId, fromId)),
+        and(eq(friendships.userId, fromId), eq(friendships.friendId, toId))
+      )
+    )
     .limit(1);
 
   if (existing.length === 0) {

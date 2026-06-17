@@ -25,8 +25,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       newSocket.on("connect", () => {
         setConnected(true);
         console.log("Socket connected");
-        // Authenticate the socket with the user ID
-        newSocket.emit("authenticate", user.id);
+        // Authenticate the socket securely (server will verify session cookie)
+        newSocket.emit("authenticate");
       });
 
       newSocket.on("disconnect", () => {

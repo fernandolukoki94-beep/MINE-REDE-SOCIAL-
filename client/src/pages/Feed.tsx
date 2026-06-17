@@ -9,6 +9,24 @@ import { useEffect, useRef, useState } from "react";
 import { useInView } from "react-intersection-observer";
 import { useSocket } from "@/contexts/SocketContext";
 
+function CommentsList({ postId }: { postId: number }) {
+  const { data: comments, isLoading } = trpc.posts.comments.useQuery({ postId });
+
+  if (isLoading) return <p className="text-xs text-gray-500">A carregar comentários...</p>;
+  if (!comments || comments.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      {comments.map((comment: any) => (
+        <div key={comment.id} className="bg-gray-50 p-2 rounded text-sm">
+          <p className="font-semibold text-xs">{comment.userName}</p>
+          <p>{comment.text}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Feed() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
@@ -17,6 +35,9 @@ export default function Feed() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isVideo, setIsVideo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [commentingOn, setCommentingOn] = useState<number | null>(null);
+  const [commentText, setCommentText] = useState("");
+  const [commentsMap, setCommentsMap] = useState<Record<number, any[]>>({});
 
   // Infinite scroll state
   const { ref: loadMoreRef, inView } = useInView();
@@ -77,6 +98,16 @@ export default function Feed() {
   // Like post mutation
   const likePostMutation = trpc.posts.like.useMutation({
     onSuccess: () => {
+      utils.posts.feed.invalidate();
+    },
+  });
+
+  // Add comment mutation
+  const addCommentMutation = trpc.posts.addComment.useMutation({
+    onSuccess: (_, variables) => {
+      setCommentText("");
+      // Refresh comments for this post
+      utils.posts.comments.invalidate({ postId: variables.postId });
       utils.posts.feed.invalidate();
     },
   });
@@ -269,11 +300,43 @@ export default function Feed() {
                   {post.likes || 0}
                 </Button>
 
-                <Button variant="ghost" size="sm">
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setCommentingOn(commentingOn === post.id ? null : post.id)}
+                >
                   <MessageCircle className="w-4 h-4 mr-2" />
                   {post.commentCount || 0}
                 </Button>
               </div>
+
+              {/* Comments Section */}
+              {commentingOn === post.id && (
+                <div className="mt-4 pt-4 border-t space-y-4">
+                  <div className="flex gap-2">
+                    <Input 
+                      placeholder="Escreve um comentário..." 
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter") {
+                          addCommentMutation.mutate({ postId: post.id, text: commentText });
+                        }
+                      }}
+                    />
+                    <Button 
+                      size="sm"
+                      onClick={() => addCommentMutation.mutate({ postId: post.id, text: commentText })}
+                      disabled={!commentText.trim() || addCommentMutation.isPending}
+                    >
+                      Postar
+                    </Button>
+                  </div>
+                  
+                  {/* Real comments would be fetched here or passed in feed */}
+                  <CommentsList postId={post.id} />
+                </div>
+              )}
             </Card>
           ))
         )}
