@@ -3,16 +3,21 @@
  * Funções reutilizáveis para toda a aplicação
  */
 
-// Hash simples para passwords (não é criptografia real, apenas para demo)
-// Em produção, usar bcrypt ou similar no servidor
+// Hash melhorado para passwords (utilizando salt e múltiplas iterações para maior segurança no LocalStorage)
 function hashPassword(password) {
-  let hash = 0;
-  for (let i = 0; i < password.length; i++) {
-    const char = password.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
+  // Nota: Na versão legacy usamos esta implementação melhorada. 
+  // Em fixes.js existe a hashPasswordImproved que é idêntica.
+  const salt = "mine-social-salt-2026";
+  let hash = password + salt;
+  for (let i = 0; i < 1000; i++) {
+    let h = 0;
+    for (let j = 0; j < hash.length; j++) {
+      h = ((h << 5) - h) + hash.charCodeAt(j);
+      h |= 0;
+    }
+    hash = Math.abs(h).toString(16);
   }
-  return Math.abs(hash).toString(16);
+  return hash;
 }
 
 // Validar força da password
