@@ -90,7 +90,7 @@ function register() {
   const newUser = {
     id: Date.now().toString(),
     username: username,
-    passwordHash: hashPassword(password),
+    passwordHash: hashPasswordImproved(password),
     bio: bio || "",
     avatar: "",
     createdAt: new Date().toISOString(),
@@ -136,7 +136,7 @@ function login() {
   }
 
   // Comparar hash de password
-  const passwordHash = hashPassword(password);
+  const passwordHash = hashPasswordImproved(password);
   if (user.passwordHash !== passwordHash) {
     document.getElementById("loginPasswordError").textContent = "Palavra-passe incorreta.";
     return;
@@ -197,22 +197,46 @@ function displayUsersList() {
   }
 
   listDiv.style.display = "block";
-  container.innerHTML = users.map(user => `
-    <div class="user-item">
-      <div class="user-info" style="cursor: pointer;" title="Clica para fazer login rápido (requer password)" onclick="quickLogin('${user.username}')">
-        <div class="user-avatar" style="background-color: ${getProfileColor(user.username)};">
-          ${user.username.charAt(0).toUpperCase()}
-        </div>
-        <div>
-          <div class="user-name">${sanitizeInput(user.username)}</div>
-          <div style="font-size: 0.8rem; color: var(--text-secondary);">
-            ${user.bio ? sanitizeInput(user.bio) : "Sem biografia"}
-          </div>
-        </div>
-      </div>
-      <button class="delete-user" onclick="deleteUser('${user.id}')">Eliminar</button>
-    </div>
-  `).join("");
+  container.innerHTML = "";
+  users.forEach(user => {
+    const userItem = document.createElement("div");
+    userItem.className = "user-item";
+    
+    const userInfo = document.createElement("div");
+    userInfo.className = "user-info";
+    userInfo.style.cursor = "pointer";
+    userInfo.title = "Clica para fazer login rápido (requer password)";
+    userInfo.dataset.username = user.username;
+    
+    const avatar = document.createElement("div");
+    avatar.className = "user-avatar";
+    avatar.style.backgroundColor = getProfileColor(user.username);
+    avatar.textContent = user.username.charAt(0).toUpperCase();
+    
+    const details = document.createElement("div");
+    const name = document.createElement("div");
+    name.className = "user-name";
+    name.textContent = user.username;
+    
+    const bio = document.createElement("div");
+    bio.style.fontSize = "0.8rem";
+    bio.style.color = "var(--text-secondary)";
+    bio.textContent = user.bio || "Sem biografia";
+    
+    details.appendChild(name);
+    details.appendChild(bio);
+    userInfo.appendChild(avatar);
+    userInfo.appendChild(details);
+    
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "delete-user";
+    deleteBtn.textContent = "Eliminar";
+    deleteBtn.dataset.userId = user.id;
+    
+    userItem.appendChild(userInfo);
+    userItem.appendChild(deleteBtn);
+    container.appendChild(userItem);
+  });
 }
 
 // Alternar tema
@@ -246,6 +270,25 @@ window.onload = () => {
   }
 
   displayUsersList();
+
+  // Inicializar listeners
+  document.getElementById('themeBtn')?.addEventListener('click', toggleTheme);
+  document.getElementById('registerBtn')?.addEventListener('click', register);
+  document.getElementById('loginBtn')?.addEventListener('click', login);
+  
+  const switchBtns = document.querySelectorAll('.switch-form-btn');
+  switchBtns.forEach(btn => btn.addEventListener('click', switchForm));
+
+  // Event delegation para login rápido e eliminar utilizador
+  addEventDelegation('.user-info', 'click', (e, target) => {
+    const username = target.dataset.username || target.closest('.user-info')?.dataset.username;
+    if (username) quickLogin(username);
+  });
+
+  addEventDelegation('.delete-user', 'click', (e, target) => {
+    const userId = target.dataset.userId;
+    if (userId) deleteUser(userId);
+  });
 
   // Permitir Enter para submeter formulários
   document.getElementById("registerPassword").addEventListener("keypress", (e) => {

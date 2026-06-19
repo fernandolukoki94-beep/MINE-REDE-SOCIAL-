@@ -559,28 +559,46 @@ function searchUsers() {
     return;
   }
   
-  resultsDiv.innerHTML = results.map(user => {
+  resultsDiv.innerHTML = "";
+  results.forEach(user => {
     const isFriend = friends.includes(user.id);
-    const buttonText = isFriend ? "Já são amigos" : "Enviar Pedido";
-    const buttonDisabled = isFriend ? "disabled" : "";
+    const item = document.createElement("div");
+    item.className = "search-result-item";
     
-    return `
-      <div class="search-result-item">
-        <div class="friend-info">
-          <div class="friend-avatar" style="background-color: ${getProfileColor(user.username)};">
-            ${user.username.charAt(0).toUpperCase()}
-          </div>
-          <div class="friend-details">
-            <div class="friend-name">${sanitizeInput(user.username)}</div>
-            <div class="friend-bio">${sanitizeInput(user.bio || "Sem biografia")}</div>
-          </div>
-        </div>
-<button class="friend-btn btn-add-friend" data-user-id="${user.id}" ${buttonDisabled}>
-	          ${buttonText}
-	        </button>
-      </div>
-    `;
-  }).join("");
+    const info = document.createElement("div");
+    info.className = "friend-info";
+    
+    const avatar = document.createElement("div");
+    avatar.className = "friend-avatar";
+    avatar.style.backgroundColor = getProfileColor(user.username);
+    avatar.textContent = user.username.charAt(0).toUpperCase();
+    
+    const details = document.createElement("div");
+    details.className = "friend-details";
+    
+    const name = document.createElement("div");
+    name.className = "friend-name";
+    name.textContent = user.username;
+    
+    const bio = document.createElement("div");
+    bio.className = "friend-bio";
+    bio.textContent = user.bio || "Sem biografia";
+    
+    details.appendChild(name);
+    details.appendChild(bio);
+    info.appendChild(avatar);
+    info.appendChild(details);
+    
+    const btn = document.createElement("button");
+    btn.className = "friend-btn btn-add-friend";
+    btn.textContent = isFriend ? "Já são amigos" : "Enviar Pedido";
+    if (isFriend) btn.disabled = true;
+    btn.dataset.userId = user.id;
+    
+    item.appendChild(info);
+    item.appendChild(btn);
+    resultsDiv.appendChild(item);
+  });
 }
 
 function displayFriendRequests() {
@@ -701,9 +719,17 @@ function loadPostsWithFriends(searchTerm = "") {
 
     const profileColor = getProfileColor(p.author);
     const initial = (p.author || "A").charAt(0).toUpperCase();
-    const avatarHtml = p.avatar ? 
-      `<img src="${p.avatar}" class="profile-pic" alt="Avatar">` : 
-      `<div class="profile-pic" style="background-color: ${profileColor};">${initial}</div>`;
+    // Renderização segura de avatar
+    let avatarHtml = "";
+    if (p.avatar) {
+      avatarHtml = `<img src="${p.avatar}" class="profile-pic" alt="Avatar">`;
+    } else {
+      const div = document.createElement("div");
+      div.className = "profile-pic";
+      div.style.backgroundColor = profileColor;
+      div.textContent = initial;
+      avatarHtml = div.outerHTML;
+    }
     
     const MAX_IMAGE_DATA_SIZE = 1024 * 1024;
   const imageHtml = p.image && p.image.length < MAX_IMAGE_DATA_SIZE 

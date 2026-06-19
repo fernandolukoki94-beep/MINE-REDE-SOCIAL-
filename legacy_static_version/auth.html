@@ -6,6 +6,7 @@
   <title>Mini Rede Social - Autenticação</title>
   <link rel="stylesheet" href="style.css">
   <script src="utils.js"></script>
+  <script src="fixes.js"></script>
   <style>
     .auth-container {
       max-width: 400px;
@@ -188,7 +189,7 @@
 <body>
   <header>
     <h1>Mini Rede Social</h1>
-    <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">🌙</button>
+    <button class="theme-toggle" id="themeBtn">🌙</button>
   </header>
 
   <div class="auth-container">
@@ -217,10 +218,10 @@
         <input type="text" id="registerBio" placeholder="Ex: Programador Full Stack" />
       </div>
       <div class="auth-buttons">
-        <button class="btn-primary" onclick="register()">Registar</button>
+        <button id="registerBtn" class="btn-primary">Registar</button>
       </div>
       <div class="toggle-form">
-        Já tens conta? <button onclick="switchForm()">Fazer Login</button>
+        Já tens conta? <button class="switch-form-btn">Fazer Login</button>
       </div>
     </div>
 
@@ -238,10 +239,10 @@
         <div class="error" id="loginPasswordError"></div>
       </div>
       <div class="auth-buttons">
-        <button class="btn-primary" onclick="login()">Login</button>
+        <button id="loginBtn" class="btn-primary">Login</button>
       </div>
       <div class="toggle-form">
-        Não tens conta? <button onclick="switchForm()">Registar-me</button>
+        Não tens conta? <button class="switch-form-btn">Registar-me</button>
       </div>
     </div>
 
