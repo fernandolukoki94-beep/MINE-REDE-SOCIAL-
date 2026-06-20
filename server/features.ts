@@ -7,6 +7,9 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { storagePut } from "./storage";
+import { fileTypeFromBuffer } from "file-type";
+
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 import {
   acceptFriendRequest,
   addComment,
@@ -211,10 +214,30 @@ export const postsRouter = router({
     .mutation(async ({ ctx, input }) => {
       try {
         const buffer = Buffer.from(input.file, "base64");
-        const key = `posts/${ctx.user.id}/${Date.now()}-${input.filename}`;
-        const mimeType = input.type === "image" ? "image/jpeg" : "video/mp4";
+        
+        // 1. Check file size
+        if (buffer.length > MAX_FILE_SIZE) {
+          throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "File size exceeds 5MB limit" });
+        }
 
-        const { url } = await storagePut(key, buffer, mimeType);
+        // 2. Validate Magic Bytes
+        const type = await fileTypeFromBuffer(buffer);
+        if (!type) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid file type" });
+        }
+
+        const allowedImages = ["jpg", "png", "gif", "webp"];
+        const allowedVideos = ["mp4", "webm", "mov"];
+
+        if (input.type === "image" && !allowedImages.includes(type.ext)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid image format" });
+        }
+        if (input.type === "video" && !allowedVideos.includes(type.ext)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid video format" });
+        }
+
+        const key = `posts/${ctx.user.id}/${Date.now()}-${input.filename}`;
+        const { url } = await storagePut(key, buffer, type.mime);
         return { url, key };
       } catch (error) {
         throw new TRPCError({
