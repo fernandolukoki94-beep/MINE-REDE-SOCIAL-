@@ -1,44 +1,18 @@
 /**
  * tRPC Feature Routers
  * Implements all procedures for posts, friendships, DMs, and notifications
+ * Refactored to use Service Layer for industrial scalability
  */
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { protectedProcedure, router } from "./_core/trpc";
 import { storagePut } from "./storage";
 import { fileTypeFromBuffer } from "file-type";
+import * as queries from "./queries";
+import { PostService, FriendshipService, MessageService } from "./services";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-import {
-  acceptFriendRequest,
-  addComment,
-  areFriends,
-  createNotification,
-  createPost,
-  deletePost,
-  getConversations,
-  getDirectMessages,
-  getFriendsList,
-  getFriendRequests,
-  getNotifications,
-  getPostComments,
-  getPostsWithFriends,
-  getUnreadMessageCount,
-  getUnreadNotificationCount,
-  getUserProfile,
-  hasUserLiked,
-  markMessagesAsRead,
-  markNotificationAsRead,
-  rejectFriendRequest,
-  removeFriend,
-  searchUsers,
-  sendDirectMessage,
-  sendFriendRequest,
-  toggleLike,
-  updateUserProfile,
-} from "./queries";
-import { emitToUser } from "./socket";
 
 // ========== POSTS ROUTER ==========
 
@@ -53,15 +27,7 @@ export const postsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      try {
-        const result = await createPost(ctx.user.id, input.text, input.image, input.video, input.videoThumbnail);
-        return { success: true };
-      } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to create post",
-        });
-      }
+      return await PostService.createPost(ctx.user.id, input);
     }),
 
   feed: protectedProcedure
@@ -73,15 +39,22 @@ export const postsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        const posts = await getPostsWithFriends(ctx.user.id, input.limit, input.offset);
+        // Try cache first
+        const cached = await cache.getCachedFeed(ctx.user.id, input.offset);
+        if (cached) return cached;
 
+        const posts = await queries.getPostsWithFriends(ctx.user.id, input.limit, input.offset);
+        
         // Enrich posts with like status
         const enrichedPosts = await Promise.all(
           posts.map(async (post) => ({
             ...post,
-            isLiked: await hasUserLiked(post.id, ctx.user.id),
+            isLiked: await queries.hasUserLiked(post.id, ctx.user.id),
           }))
         );
+
+        // Save to cache
+        await cache.setCachedFeed(ctx.user.id, input.offset, enrichedPosts);
 
         return enrichedPosts;
       } catch (error) {
@@ -96,7 +69,7 @@ export const postsRouter = router({
     .input(z.object({ postId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       try {
-        await deletePost(input.postId, ctx.user.id);
+        await queries.deletePost(input.postId, ctx.user.id);
         return { success: true };
       } catch (error) {
         throw new TRPCError({
@@ -109,39 +82,7 @@ export const postsRouter = router({
   like: protectedProcedure
     .input(z.object({ postId: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      try {
-        const result = await toggleLike(input.postId, ctx.user.id);
-
-        // Create notification if liked - notify post owner
-        if (result.liked) {
-          // Get post owner ID from database
-          const postData = await (await import('./queries')).getPostById(input.postId);
-          if (postData && postData.userId !== ctx.user.id) {
-            const notification = await createNotification(
-              postData.userId,
-              "like",
-              `${ctx.user.name} gostou do seu post`,
-              ctx.user.id,
-              input.postId
-            );
-            if (notification) {
-              emitToUser(postData.userId, "notification", {
-                type: "like",
-                message: `${ctx.user.name} gostou do seu post`,
-                relatedUserId: ctx.user.id,
-                relatedPostId: input.postId,
-              });
-            }
-          }
-        }
-
-        return result;
-      } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to toggle like",
-        });
-      }
+      return await PostService.toggleLike(input.postId, ctx.user.id, ctx.user.name);
     }),
 
   comments: protectedProcedure
@@ -154,7 +95,7 @@ export const postsRouter = router({
     )
     .query(async ({ input }) => {
       try {
-        return await getPostComments(input.postId, input.limit, input.offset);
+        return await queries.getPostComments(input.postId, input.limit, input.offset);
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -171,36 +112,7 @@ export const postsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      try {
-        const result = await addComment(input.postId, ctx.user.id, input.text);
-
-        // Create notification - notify post owner
-        const postData = await (await import('./queries')).getPostById(input.postId);
-        if (postData && postData.userId !== ctx.user.id) {
-          const notification = await createNotification(
-            postData.userId,
-            "comment",
-            `${ctx.user.name} comentou no seu post`,
-            ctx.user.id,
-            input.postId
-          );
-          if (notification) {
-            emitToUser(postData.userId, "notification", {
-              type: "comment",
-              message: `${ctx.user.name} comentou no seu post`,
-              relatedUserId: ctx.user.id,
-              relatedPostId: input.postId,
-            });
-          }
-        }
-
-        return { success: true };
-      } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to add comment",
-        });
-      }
+      return await PostService.addComment(input.postId, ctx.user.id, ctx.user.name, input.text);
     }),
 
   uploadMedia: protectedProcedure
@@ -215,12 +127,10 @@ export const postsRouter = router({
       try {
         const buffer = Buffer.from(input.file, "base64");
         
-        // 1. Check file size
         if (buffer.length > MAX_FILE_SIZE) {
           throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "File size exceeds 5MB limit" });
         }
 
-        // 2. Validate Magic Bytes
         const type = await fileTypeFromBuffer(buffer);
         if (!type) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid file type" });
@@ -240,6 +150,7 @@ export const postsRouter = router({
         const { url } = await storagePut(key, buffer, type.mime);
         return { url, key };
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to upload media",
@@ -253,7 +164,7 @@ export const postsRouter = router({
 export const profileRouter = router({
   get: protectedProcedure.query(async ({ ctx }) => {
     try {
-      return await getUserProfile(ctx.user.id);
+      return await queries.getUserProfile(ctx.user.id);
     } catch (error) {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
@@ -271,7 +182,7 @@ export const profileRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        await updateUserProfile(ctx.user.id, input.bio || "", input.avatar || null);
+        await queries.updateUserProfile(ctx.user.id, input.bio || "", input.avatar || null);
         return { success: true };
       } catch (error) {
         throw new TRPCError({
@@ -288,76 +199,20 @@ export const friendsRouter = router({
   sendRequest: protectedProcedure
     .input(z.object({ toUserId: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      try {
-        if (ctx.user.id === input.toUserId) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Cannot send friend request to yourself",
-          });
-        }
-
-        await sendFriendRequest(ctx.user.id, input.toUserId);
-
-        // Create notification
-        const notification = await createNotification(
-          input.toUserId,
-          "friend_request",
-          `${ctx.user.name} enviou um pedido de amizade`,
-          ctx.user.id
-        );
-        if (notification) {
-          emitToUser(input.toUserId, "notification", {
-            type: "friend_request",
-            message: `${ctx.user.name} enviou um pedido de amizade`,
-            relatedUserId: ctx.user.id,
-          });
-        }
-
-        return { success: true };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to send friend request",
-        });
-      }
+      return await FriendshipService.sendRequest(ctx.user.id, input.toUserId, ctx.user.name);
     }),
 
   accept: protectedProcedure
     .input(z.object({ fromUserId: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      try {
-        await acceptFriendRequest(input.fromUserId, ctx.user.id);
-
-        // Create notification
-        const notification = await createNotification(
-          input.fromUserId,
-          "friend_accepted",
-          `${ctx.user.name} aceitou seu pedido de amizade`,
-          ctx.user.id
-        );
-        if (notification) {
-          emitToUser(input.fromUserId, "notification", {
-            type: "friend_accepted",
-            message: `${ctx.user.name} aceitou seu pedido de amizade`,
-            relatedUserId: ctx.user.id,
-          });
-        }
-
-        return { success: true };
-      } catch (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to accept friend request",
-        });
-      }
+      return await FriendshipService.acceptRequest(input.fromUserId, ctx.user.id, ctx.user.name);
     }),
 
   reject: protectedProcedure
     .input(z.object({ fromUserId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       try {
-        await rejectFriendRequest(input.fromUserId, ctx.user.id);
+        await queries.rejectFriendRequest(input.fromUserId, ctx.user.id);
         return { success: true };
       } catch (error) {
         throw new TRPCError({
@@ -371,7 +226,7 @@ export const friendsRouter = router({
     .input(z.object({ friendId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       try {
-        await removeFriend(input.friendId, ctx.user.id);
+        await queries.removeFriend(input.friendId, ctx.user.id);
         return { success: true };
       } catch (error) {
         throw new TRPCError({
@@ -383,7 +238,7 @@ export const friendsRouter = router({
 
   requests: protectedProcedure.query(async ({ ctx }) => {
     try {
-      return await getFriendRequests(ctx.user.id);
+      return await queries.getFriendRequests(ctx.user.id);
     } catch (error) {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
@@ -394,7 +249,7 @@ export const friendsRouter = router({
 
   list: protectedProcedure.query(async ({ ctx }) => {
     try {
-      return await getFriendsList(ctx.user.id);
+      return await queries.getFriendsList(ctx.user.id);
     } catch (error) {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
@@ -407,7 +262,7 @@ export const friendsRouter = router({
     .input(z.object({ query: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
       try {
-        return await searchUsers(input.query, ctx.user.id, 10);
+        return await queries.searchUsers(input.query, ctx.user.id, 10);
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -428,54 +283,12 @@ export const messagesRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      try {
-        // Verify friendship
-        const isFriend = await areFriends(ctx.user.id, input.recipientId);
-        if (!isFriend) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "You can only message friends",
-          });
-        }
-
-        const result = await sendDirectMessage(ctx.user.id, input.recipientId, input.text);
-
-        // Create notification
-        const notification = await createNotification(
-          input.recipientId,
-          "message",
-          `${ctx.user.name} enviou uma mensagem`,
-          ctx.user.id
-        );
-        
-        // Emit socket events for message
-        emitToUser(input.recipientId, "new_message", {
-          senderId: ctx.user.id,
-          text: input.text,
-          createdAt: new Date().toISOString(),
-        });
-        
-        if (notification) {
-          emitToUser(input.recipientId, "notification", {
-            type: "message",
-            message: `${ctx.user.name} enviou uma mensagem`,
-            relatedUserId: ctx.user.id,
-          });
-        }
-
-        return { success: true };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to send message",
-        });
-      }
+      return await MessageService.sendMessage(ctx.user.id, ctx.user.name, input.recipientId, input.text);
     }),
 
   conversations: protectedProcedure.query(async ({ ctx }) => {
     try {
-      return await getConversations(ctx.user.id);
+      return await queries.getConversations(ctx.user.id);
     } catch (error) {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
@@ -494,11 +307,8 @@ export const messagesRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        const messages = await getDirectMessages(ctx.user.id, input.otherUserId, input.limit, input.offset);
-
-        // Mark as read
-        await markMessagesAsRead(ctx.user.id, input.otherUserId);
-
+        const messages = await queries.getDirectMessages(ctx.user.id, input.otherUserId, input.limit, input.offset);
+        await queries.markMessagesAsRead(ctx.user.id, input.otherUserId);
         return messages;
       } catch (error) {
         throw new TRPCError({
@@ -510,8 +320,7 @@ export const messagesRouter = router({
 
   unreadCount: protectedProcedure.query(async ({ ctx }) => {
     try {
-      const count = await getUnreadMessageCount(ctx.user.id);
-      return { count };
+      return await queries.getUnreadMessageCount(ctx.user.id);
     } catch (error) {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
@@ -533,7 +342,7 @@ export const notificationsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        return await getNotifications(ctx.user.id, input.limit, input.offset);
+        return await queries.getNotifications(ctx.user.id, input.limit, input.offset);
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -546,7 +355,7 @@ export const notificationsRouter = router({
     .input(z.object({ notificationId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       try {
-        await markNotificationAsRead(input.notificationId, ctx.user.id);
+        await queries.markNotificationAsRead(input.notificationId, ctx.user.id);
         return { success: true };
       } catch (error) {
         throw new TRPCError({
@@ -558,12 +367,11 @@ export const notificationsRouter = router({
 
   unreadCount: protectedProcedure.query(async ({ ctx }) => {
     try {
-      const count = await getUnreadNotificationCount(ctx.user.id);
-      return { count };
+      return await queries.getUnreadNotificationCount(ctx.user.id);
     } catch (error) {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to fetch unread count",
+        message: "Failed to fetch unread notification count",
       });
     }
   }),
@@ -574,24 +382,23 @@ export const notificationsRouter = router({
 export const dataRouter = router({
   export: protectedProcedure.mutation(async ({ ctx }) => {
     try {
-      const data = await (await import('./queries')).exportUserData(ctx.user.id);
-      return data;
+      return await queries.exportUserData(ctx.user.id);
     } catch (error) {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to export user data",
+        message: "Failed to export data",
       });
     }
   }),
 
   clear: protectedProcedure.mutation(async ({ ctx }) => {
     try {
-      await (await import('./queries')).clearUserData(ctx.user.id);
+      await queries.clearUserData(ctx.user.id);
       return { success: true };
     } catch (error) {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to clear user data",
+        message: "Failed to clear data",
       });
     }
   }),

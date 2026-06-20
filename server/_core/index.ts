@@ -9,6 +9,8 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { setupSocketIO } from "../socket";
 import { serveStatic, setupVite } from "./vite";
+import helmet from "helmet";
+import { rateLimit } from "express-rate-limit";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -33,6 +35,21 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
   
+  // Security Headers
+  app.use(helmet({
+    contentSecurityPolicy: false, // Disable for dev/simplicity, enable with config in production
+    crossOriginEmbedderPolicy: false,
+  }));
+
+  // Rate Limiting
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    limit: 100, // Limit each IP to 100 requests per `window`
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+  });
+  app.use("/api", limiter);
+
   // Setup Socket.io
   setupSocketIO(server);
   // Configure body parser with larger size limit for file uploads

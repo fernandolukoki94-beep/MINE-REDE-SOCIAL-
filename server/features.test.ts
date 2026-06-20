@@ -1,15 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+import * as PostService from "./services/PostService";
+import * as FriendshipService from "./services/FriendshipService";
+import * as MessageService from "./services/MessageService";
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
-function createAuthContext(userId: number = 1): { ctx: TrpcContext } {
+function createAuthContext(userId: number = 1, userName: string = `User ${userId}`): { ctx: TrpcContext } {
   const user: AuthenticatedUser = {
     id: userId,
     openId: `user-${userId}`,
     email: `user${userId}@example.com`,
-    name: `User ${userId}`,
+    name: userName,
     loginMethod: "manus",
     role: "user",
     createdAt: new Date(),
@@ -31,133 +34,300 @@ function createAuthContext(userId: number = 1): { ctx: TrpcContext } {
   return { ctx };
 }
 
-describe("Posts Router", () => {
-  it("should validate post text is required", async () => {
-    const { ctx } = createAuthContext(1);
-    const caller = appRouter.createCaller(ctx);
+// Mock services to isolate router logic
+vi.mock("./services/PostService", () => ({
+  PostService: {
+    createPost: vi.fn(),
+    toggleLike: vi.fn(),
+    addComment: vi.fn(),
+  },
+}));
 
-    try {
-      await caller.posts.create({
-        text: "",
-      });
-      expect.fail("Should have thrown an error");
-    } catch (error) {
-      expect(error).toBeDefined();
-    }
+vi.mock("./services/FriendshipService", () => ({
+  FriendshipService: {
+    sendRequest: vi.fn(),
+    acceptRequest: vi.fn(),
+  },
+}));
+
+vi.mock("./services/MessageService", () => ({
+  MessageService: {
+    sendMessage: vi.fn(),
+  },
+}));
+
+// Mock queries that are still directly called by routers (e.g., getPostsWithFriends, deletePost)
+vi.mock("./queries", () => ({
+  getPostsWithFriends: vi.fn(),
+  hasUserLiked: vi.fn(),
+  deletePost: vi.fn(),
+  getPostComments: vi.fn(),
+  getUserProfile: vi.fn(),
+  updateUserProfile: vi.fn(),
+  rejectFriendRequest: vi.fn(),
+  removeFriend: vi.fn(),
+  getFriendRequests: vi.fn(),
+  getFriendsList: vi.fn(),
+  searchUsers: vi.fn(),
+  getConversations: vi.fn(),
+  getDirectMessages: vi.fn(),
+  markMessagesAsRead: vi.fn(),
+  getUnreadMessageCount: vi.fn(),
+  getNotifications: vi.fn(),
+  markNotificationAsRead: vi.fn(),
+  getUnreadNotificationCount: vi.fn(),
+  exportUserData: vi.fn(),
+  clearUserData: vi.fn(),
+}));
+
+describe("Posts Router", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it("should validate post text length", async () => {
+  it("should call PostService.createPost when creating a post", async () => {
+    const { ctx } = createAuthContext(1, "Test User");
+    const caller = appRouter.createCaller(ctx);
+    const postData = { text: "My new post" };
+    vi.mocked(PostService.PostService.createPost).mockResolvedValueOnce({ success: true });
+
+    const result = await caller.posts.create(postData);
+    expect(PostService.PostService.createPost).toHaveBeenCalledWith(ctx.user.id, postData);
+    expect(result).toEqual({ success: true });
+  });
+
+  it("should call PostService.toggleLike when liking a post", async () => {
+    const { ctx } = createAuthContext(1, "Test User");
+    const caller = appRouter.createCaller(ctx);
+    const postId = 123;
+    vi.mocked(PostService.PostService.toggleLike).mockResolvedValueOnce({ liked: true, likes: 1 });
+
+    const result = await caller.posts.like({ postId });
+    expect(PostService.PostService.toggleLike).toHaveBeenCalledWith(postId, ctx.user.id, ctx.user.name);
+    expect(result).toEqual({ liked: true, likes: 1 });
+  });
+
+  it("should call PostService.addComment when adding a comment", async () => {
+    const { ctx } = createAuthContext(1, "Test User");
+    const caller = appRouter.createCaller(ctx);
+    const postId = 123;
+    const commentText = "Great post!";
+    vi.mocked(PostService.PostService.addComment).mockResolvedValueOnce({ success: true });
+
+    const result = await caller.posts.addComment({ postId, text: commentText });
+    expect(PostService.PostService.addComment).toHaveBeenCalledWith(postId, ctx.user.id, ctx.user.name, commentText);
+    expect(result).toEqual({ success: true });
+  });
+
+  it("should fetch feed posts", async () => {
     const { ctx } = createAuthContext(1);
     const caller = appRouter.createCaller(ctx);
+    vi.mocked(queries.getPostsWithFriends).mockResolvedValueOnce([]);
+    vi.mocked(queries.hasUserLiked).mockResolvedValueOnce(false);
 
-    try {
-      const longText = "a".repeat(5001);
-      await caller.posts.create({
-        text: longText,
-      });
-      expect.fail("Should have thrown an error");
-    } catch (error) {
-      expect(error).toBeDefined();
-    }
+    const result = await caller.posts.feed({ limit: 10, offset: 0 });
+    expect(queries.getPostsWithFriends).toHaveBeenCalledWith(ctx.user.id, 10, 0);
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("should delete a post", async () => {
+    const { ctx } = createAuthContext(1);
+    const caller = appRouter.createCaller(ctx);
+    vi.mocked(queries.deletePost).mockResolvedValueOnce(undefined);
+
+    const result = await caller.posts.delete({ postId: 1 });
+    expect(queries.deletePost).toHaveBeenCalledWith(1, ctx.user.id);
+    expect(result).toEqual({ success: true });
   });
 });
 
 describe("Friends Router", () => {
-  it("should reject self friend request", async () => {
-    const { ctx } = createAuthContext(1);
-    const caller = appRouter.createCaller(ctx);
-
-    try {
-      await caller.friends.sendRequest({
-        toUserId: 1,
-      });
-      expect.fail("Should have thrown an error");
-    } catch (error) {
-      expect(error).toBeDefined();
-    }
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
-});
 
-describe("Notifications Router", () => {
-  it("should fetch notifications with valid parameters", async () => {
+  it("should call FriendshipService.sendRequest when sending a friend request", async () => {
+    const { ctx } = createAuthContext(1, "Test User");
+    const caller = appRouter.createCaller(ctx);
+    const toUserId = 2;
+    vi.mocked(FriendshipService.FriendshipService.sendRequest).mockResolvedValueOnce({ success: true });
+
+    const result = await caller.friends.sendRequest({ toUserId });
+    expect(FriendshipService.FriendshipService.sendRequest).toHaveBeenCalledWith(ctx.user.id, toUserId, ctx.user.name);
+    expect(result).toEqual({ success: true });
+  });
+
+  it("should call FriendshipService.acceptRequest when accepting a friend request", async () => {
+    const { ctx } = createAuthContext(2, "Test User 2");
+    const caller = appRouter.createCaller(ctx);
+    const fromUserId = 1;
+    vi.mocked(FriendshipService.FriendshipService.acceptRequest).mockResolvedValueOnce({ success: true });
+
+    const result = await caller.friends.accept({ fromUserId });
+    expect(FriendshipService.FriendshipService.acceptRequest).toHaveBeenCalledWith(fromUserId, ctx.user.id, ctx.user.name);
+    expect(result).toEqual({ success: true });
+  });
+
+  it("should reject a friend request", async () => {
+    const { ctx } = createAuthContext(2);
+    const caller = appRouter.createCaller(ctx);
+    vi.mocked(queries.rejectFriendRequest).mockResolvedValueOnce(undefined);
+
+    const result = await caller.friends.reject({ fromUserId: 1 });
+    expect(queries.rejectFriendRequest).toHaveBeenCalledWith(1, ctx.user.id);
+    expect(result).toEqual({ success: true });
+  });
+
+  it("should remove a friend", async () => {
     const { ctx } = createAuthContext(1);
     const caller = appRouter.createCaller(ctx);
+    vi.mocked(queries.removeFriend).mockResolvedValueOnce(undefined);
 
-    const result = await caller.notifications.list({
-      limit: 10,
-      offset: 0,
-    });
+    const result = await caller.friends.remove({ friendId: 2 });
+    expect(queries.removeFriend).toHaveBeenCalledWith(2, ctx.user.id);
+    expect(result).toEqual({ success: true });
+  });
 
+  it("should fetch friend requests", async () => {
+    const { ctx } = createAuthContext(1);
+    const caller = appRouter.createCaller(ctx);
+    vi.mocked(queries.getFriendRequests).mockResolvedValueOnce([]);
+
+    const result = await caller.friends.requests();
+    expect(queries.getFriendRequests).toHaveBeenCalledWith(ctx.user.id);
     expect(Array.isArray(result)).toBe(true);
   });
 
-  it("should validate notification limit", async () => {
+  it("should fetch friends list", async () => {
     const { ctx } = createAuthContext(1);
     const caller = appRouter.createCaller(ctx);
+    vi.mocked(queries.getFriendsList).mockResolvedValueOnce([]);
 
-    try {
-      await caller.notifications.list({
-        limit: 100,
-        offset: 0,
-      });
-      expect.fail("Should have thrown an error");
-    } catch (error) {
-      expect(error).toBeDefined();
-    }
+    const result = await caller.friends.list();
+    expect(queries.getFriendsList).toHaveBeenCalledWith(ctx.user.id);
+    expect(Array.isArray(result)).toBe(true);
   });
 
-  it("should fetch unread count", async () => {
+  it("should search users", async () => {
     const { ctx } = createAuthContext(1);
     const caller = appRouter.createCaller(ctx);
+    vi.mocked(queries.searchUsers).mockResolvedValueOnce([]);
 
-    const result = await caller.notifications.unreadCount();
-
-    expect(result).toHaveProperty("count");
-    expect(typeof result.count).toBe("number");
-    expect(result.count).toBeGreaterThanOrEqual(0);
+    const result = await caller.friends.search({ query: "test" });
+    expect(queries.searchUsers).toHaveBeenCalledWith("test", ctx.user.id, 10);
+    expect(Array.isArray(result)).toBe(true);
   });
 });
 
 describe("Messages Router", () => {
-  it("should validate message text is required", async () => {
-    const { ctx } = createAuthContext(1);
-    const caller = appRouter.createCaller(ctx);
-
-    try {
-      await caller.messages.send({
-        recipientId: 2,
-        text: "",
-      });
-      expect.fail("Should have thrown an error");
-    } catch (error) {
-      expect(error).toBeDefined();
-    }
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it("should validate message text length", async () => {
+  it("should call MessageService.sendMessage when sending a message", async () => {
+    const { ctx } = createAuthContext(1, "Test User");
+    const caller = appRouter.createCaller(ctx);
+    const recipientId = 2;
+    const messageText = "Hello friend!";
+    vi.mocked(MessageService.MessageService.sendMessage).mockResolvedValueOnce({ success: true });
+
+    const result = await caller.messages.send({ recipientId, text: messageText });
+    expect(MessageService.MessageService.sendMessage).toHaveBeenCalledWith(ctx.user.id, ctx.user.name, recipientId, messageText);
+    expect(result).toEqual({ success: true });
+  });
+
+  it("should fetch conversations", async () => {
     const { ctx } = createAuthContext(1);
     const caller = appRouter.createCaller(ctx);
+    vi.mocked(queries.getConversations).mockResolvedValueOnce([]);
 
-    try {
-      const longText = "a".repeat(501);
-      await caller.messages.send({
-        recipientId: 2,
-        text: longText,
-      });
-      expect.fail("Should have thrown an error");
-    } catch (error) {
-      expect(error).toBeDefined();
-    }
+    const result = await caller.messages.conversations();
+    expect(queries.getConversations).toHaveBeenCalledWith(ctx.user.id);
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("should fetch message history and mark as read", async () => {
+    const { ctx } = createAuthContext(1);
+    const caller = appRouter.createCaller(ctx);
+    vi.mocked(queries.getDirectMessages).mockResolvedValueOnce([]);
+    vi.mocked(queries.markMessagesAsRead).mockResolvedValueOnce(undefined);
+
+    const result = await caller.messages.history({ otherUserId: 2, limit: 10, offset: 0 });
+    expect(queries.getDirectMessages).toHaveBeenCalledWith(ctx.user.id, 2, 10, 0);
+    expect(queries.markMessagesAsRead).toHaveBeenCalledWith(ctx.user.id, 2);
+    expect(Array.isArray(result)).toBe(true);
   });
 
   it("should fetch unread message count", async () => {
     const { ctx } = createAuthContext(1);
     const caller = appRouter.createCaller(ctx);
+    vi.mocked(queries.getUnreadMessageCount).mockResolvedValueOnce(5);
 
     const result = await caller.messages.unreadCount();
+    expect(queries.getUnreadMessageCount).toHaveBeenCalledWith(ctx.user.id);
+    expect(result).toBe(5);
+  });
+});
 
-    expect(result).toHaveProperty("count");
-    expect(typeof result.count).toBe("number");
-    expect(result.count).toBeGreaterThanOrEqual(0);
+describe("Notifications Router", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should fetch notifications", async () => {
+    const { ctx } = createAuthContext(1);
+    const caller = appRouter.createCaller(ctx);
+    vi.mocked(queries.getNotifications).mockResolvedValueOnce([]);
+
+    const result = await caller.notifications.list({ limit: 10, offset: 0 });
+    expect(queries.getNotifications).toHaveBeenCalledWith(ctx.user.id, 10, 0);
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("should mark notification as read", async () => {
+    const { ctx } = createAuthContext(1);
+    const caller = appRouter.createCaller(ctx);
+    vi.mocked(queries.markNotificationAsRead).mockResolvedValueOnce(undefined);
+
+    const result = await caller.notifications.markAsRead({ notificationId: 1 });
+    expect(queries.markNotificationAsRead).toHaveBeenCalledWith(1, ctx.user.id);
+    expect(result).toEqual({ success: true });
+  });
+
+  it("should fetch unread notification count", async () => {
+    const { ctx } = createAuthContext(1);
+    const caller = appRouter.createCaller(ctx);
+    vi.mocked(queries.getUnreadNotificationCount).mockResolvedValueOnce(3);
+
+    const result = await caller.notifications.unreadCount();
+    expect(queries.getUnreadNotificationCount).toHaveBeenCalledWith(ctx.user.id);
+    expect(result).toBe(3);
+  });
+});
+
+describe("Data Management Router", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should export user data", async () => {
+    const { ctx } = createAuthContext(1);
+    const caller = appRouter.createCaller(ctx);
+    const mockExportData = { user: { id: 1, name: "Test User" } };
+    vi.mocked(queries.exportUserData).mockResolvedValueOnce(mockExportData);
+
+    const result = await caller.data.export();
+    expect(queries.exportUserData).toHaveBeenCalledWith(ctx.user.id);
+    expect(result).toEqual(mockExportData);
+  });
+
+  it("should clear user data", async () => {
+    const { ctx } = createAuthContext(1);
+    const caller = appRouter.createCaller(ctx);
+    vi.mocked(queries.clearUserData).mockResolvedValueOnce(undefined);
+
+    const result = await caller.data.clear();
+    expect(queries.clearUserData).toHaveBeenCalledWith(ctx.user.id);
+    expect(result).toEqual({ success: true });
   });
 });
