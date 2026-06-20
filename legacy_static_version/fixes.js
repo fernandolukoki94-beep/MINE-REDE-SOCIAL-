@@ -165,7 +165,10 @@ function createImageElement(base64, alt = 'Imagem') {
 /**
  * Parse seguro de JSON com fallback
  */
-function safeJSONParse(jsonString, defaultValue = []) {
+/**
+ * Parse seguro de JSON com fallback (Mantido para compatibilidade de string)
+ */
+function safeJSONParseString(jsonString, defaultValue = []) {
   try {
     if (!jsonString) return defaultValue;
     return JSON.parse(jsonString);
@@ -173,6 +176,18 @@ function safeJSONParse(jsonString, defaultValue = []) {
     console.error('JSON parse error:', error);
     return defaultValue;
   }
+}
+
+/**
+ * Sobrescrever com versão robusta que detecta se é chave ou string JSON
+ */
+function safeJSONParse(input, defaultValue = []) {
+  // Se for uma chave do localStorage
+  if (typeof input === 'string' && !input.startsWith('{') && !input.startsWith('[')) {
+    return safeGetFromStorage(input, defaultValue);
+  }
+  // Se for uma string JSON
+  return safeJSONParseString(input, defaultValue);
 }
 
 /**

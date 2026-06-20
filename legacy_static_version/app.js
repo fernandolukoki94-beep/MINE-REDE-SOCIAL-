@@ -673,32 +673,60 @@ function displayFriendsList() {
   const friends = getFriendsList();
   const friendsDiv = document.getElementById("friendsList");
   
+  if (!friendsDiv) return;
+  
   if (friends.length === 0) {
-    friendsDiv.innerHTML = '<p class="no-results">Ainda não tens amigos. Procura e envia pedidos!</p>';
+    friendsDiv.innerHTML = '';
+    const noResults = document.createElement('p');
+    noResults.className = 'no-results';
+    noResults.textContent = 'Ainda não tens amigos adicionados.';
+    friendsDiv.appendChild(noResults);
     return;
   }
   
   const users = safeJSONParse("users", []);
+  friendsDiv.innerHTML = ''; // Limpar antes de adicionar elementos DOM seguros
   
-  friendsDiv.innerHTML = friends.map(friendId => {
+  friends.forEach(friendId => {
     const user = users.find(u => u.id === friendId);
-    if (!user) return "";
+    if (!user) return;
     
-    return `
-      <div class="friend-item">
-        <div class="friend-info">
-          <div class="friend-avatar" style="background-color: ${getProfileColor(user.username)};">
-            ${sanitizeInput(user.username.charAt(0).toUpperCase())}
-          </div>
-          <div class="friend-details">
-            <div class="friend-name">${sanitizeInput(user.username)}</div>
-            <div class="friend-bio">${sanitizeInput(user.bio || "Sem biografia")}</div>
-          </div>
-        </div>
-        <button class="friend-btn btn-remove" data-friend-id="${sanitizeInput(friendId)}">Remover</button>
-      </div>
-    `;
-  }).join("");
+    const item = document.createElement('div');
+    item.className = 'friend-item';
+    
+    const info = document.createElement('div');
+    info.className = 'friend-info';
+    
+    const avatar = document.createElement('div');
+    avatar.className = 'friend-avatar';
+    avatar.style.backgroundColor = getProfileColor(user.username);
+    avatar.textContent = user.username.charAt(0).toUpperCase();
+    
+    const details = document.createElement('div');
+    details.className = 'friend-details';
+    
+    const name = document.createElement('div');
+    name.className = 'friend-name';
+    name.textContent = user.username;
+    
+    const bio = document.createElement('div');
+    bio.className = 'friend-bio';
+    bio.textContent = user.bio || "Sem biografia";
+    
+    details.appendChild(name);
+    details.appendChild(bio);
+    info.appendChild(avatar);
+    info.appendChild(details);
+    
+    const btn = document.createElement('button');
+    btn.className = 'friend-btn btn-remove';
+    btn.textContent = 'Remover';
+    btn.dataset.friendId = friendId;
+    
+    item.appendChild(info);
+    item.appendChild(btn);
+    friendsDiv.appendChild(item);
+  });
 }
 
 // ========== FEED COM AMIGOS ==========

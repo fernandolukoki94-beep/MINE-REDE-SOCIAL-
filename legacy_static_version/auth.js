@@ -5,7 +5,7 @@
 
 // Helpers de Armazenamento
 function getAllUsers() {
-  return JSON.parse(localStorage.getItem("users") || "[]");
+  return safeJSONParse("users", []);
 }
 
 function saveUsers(users) {
@@ -90,7 +90,7 @@ function register() {
   const newUser = {
     id: Date.now().toString(),
     username: username,
-    passwordHash: hashPassword(password),
+    passwordHash: typeof hashPasswordImproved === 'function' ? hashPasswordImproved(password) : hashPassword(password),
     bio: bio || "",
     avatar: "",
     createdAt: new Date().toISOString(),
@@ -136,8 +136,10 @@ function login() {
   }
 
   // Comparar hash de password
-  const passwordHash = hashPassword(password);
-  if (user.passwordHash !== passwordHash) {
+  const passwordHash = typeof hashPasswordImproved === 'function' ? hashPasswordImproved(password) : hashPassword(password);
+  // Compatibilidade com hash antigo para utilizadores existentes
+  const oldHash = hashPassword(password);
+  if (user.passwordHash !== passwordHash && user.passwordHash !== oldHash) {
     document.getElementById("loginPasswordError").textContent = "Palavra-passe incorreta.";
     return;
   }
