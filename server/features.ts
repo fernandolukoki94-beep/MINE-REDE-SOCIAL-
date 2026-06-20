@@ -142,10 +142,16 @@ export const postsRouter = router({
     }),
 
   comments: protectedProcedure
-    .input(z.object({ postId: z.number() }))
+    .input(
+      z.object({
+        postId: z.number(),
+        limit: z.number().min(1).max(100).default(20),
+        offset: z.number().min(0).default(0),
+      })
+    )
     .query(async ({ input }) => {
       try {
-        return await getPostComments(input.postId);
+        return await getPostComments(input.postId, input.limit, input.offset);
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",

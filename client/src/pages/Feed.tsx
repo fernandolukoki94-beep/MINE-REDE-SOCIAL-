@@ -10,19 +10,45 @@ import { useInView } from "react-intersection-observer";
 import { useSocket } from "@/contexts/SocketContext";
 
 function CommentsList({ postId }: { postId: number }) {
-  const { data: comments, isLoading } = trpc.posts.comments.useQuery({ postId });
+  const [offset, setOffset] = useState(0);
+  const [allComments, setAllComments] = useState<any[]>([]);
+  const { data: commentsData, isLoading } = trpc.posts.comments.useQuery({ 
+    postId, 
+    limit: 10, 
+    offset 
+  });
 
-  if (isLoading) return <p className="text-xs text-gray-500">A carregar comentários...</p>;
-  if (!comments || comments.length === 0) return null;
+  useEffect(() => {
+    if (commentsData) {
+      if (offset === 0) {
+        setAllComments(commentsData);
+      } else {
+        setAllComments(prev => [...prev, ...commentsData]);
+      }
+    }
+  }, [commentsData, offset]);
+
+  if (isLoading && offset === 0) return <p className="text-xs text-gray-500">A carregar comentários...</p>;
+  if (allComments.length === 0) return null;
 
   return (
     <div className="space-y-2">
-      {comments.map((comment: any) => (
+      {allComments.map((comment: any) => (
         <div key={comment.id} className="bg-gray-50 p-2 rounded text-sm">
           <p className="font-semibold text-xs">{comment.userName}</p>
           <p>{comment.text}</p>
         </div>
       ))}
+      {commentsData && commentsData.length === 10 && (
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="text-xs w-full"
+          onClick={() => setOffset(prev => prev + 10)}
+        >
+          Ver mais comentários
+        </Button>
+      )}
     </div>
   );
 }

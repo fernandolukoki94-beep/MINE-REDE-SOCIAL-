@@ -76,11 +76,12 @@ export async function getPostsWithFriends(userId: number, limit: number = 20, of
 
 export async function deletePost(postId: number, userId: number) {
   const db = await getDb();
-  if (!db) return;
+  if (!db) throw new Error("Database not available");
 
   // Verify ownership
   const post = await db.select().from(posts).where(eq(posts.id, postId)).limit(1);
-  if (post.length === 0 || post[0].userId !== userId) return;
+  if (post.length === 0) throw new Error("Post not found");
+  if (post[0].userId !== userId) throw new Error("Unauthorized to delete this post");
 
   // Delete related data
   await db.delete(postLikes).where(eq(postLikes.postId, postId));
@@ -94,23 +95,44 @@ export async function toggleLike(postId: number, userId: number) {
   const db = await getDb();
   if (!db) return { liked: false };
 
-  const existing = await db
-    .select()
-    .from(postLikes)
-    .where(and(eq(postLikes.postId, postId), eq(postLikes.userId, userId)))
-    .limit(1);
+  // Use a transaction to ensure consistency between postLikes table and posts.likes counter
+  return await db.transaction(async (tx) => {
+    const existing = await tx
+      .select()
+      .from(postLikes)
+      .where(and(eq(postLikes.postId, postId), eq(postLikes.userId, userId)))
+      .limit(1);
 
-  if (existing.length > 0) {
-    // Unlike
-    await db.delete(postLikes).where(and(eq(postLikes.postId, postId), eq(postLikes.userId, userId)));
-    await db.update(posts).set({ likes: sql`${posts.likes} - 1` }).where(eq(posts.id, postId));
-    return { liked: false };
-  } else {
-    // Like
-    await db.insert(postLikes).values({ postId, userId });
-    await db.update(posts).set({ likes: sql`${posts.likes} + 1` }).where(eq(posts.id, postId));
-    return { liked: true };
-  }
+    if (existing.length > 0) {
+      // Unlike
+      await tx.delete(postLikes).where(and(eq(postLikes.postId, postId), eq(postLikes.userId, userId)));
+      
+      // Re-calculate actual count to avoid drift from race conditions
+      const likeCountResult = await tx
+        .select({ count: count() })
+        .from(postLikes)
+        .where(eq(postLikes.postId, postId));
+      
+      const newCount = likeCountResult[0].count;
+      await tx.update(posts).set({ likes: newCount }).where(eq(posts.id, postId));
+      
+      return { liked: false, likes: newCount };
+    } else {
+      // Like
+      await tx.insert(postLikes).values({ postId, userId });
+      
+      // Re-calculate actual count
+      const likeCountResult = await tx
+        .select({ count: count() })
+        .from(postLikes)
+        .where(eq(postLikes.postId, postId));
+      
+      const newCount = likeCountResult[0].count;
+      await tx.update(posts).set({ likes: newCount }).where(eq(posts.id, postId));
+      
+      return { liked: true, likes: newCount };
+    }
+  });
 }
 
 export async function hasUserLiked(postId: number, userId: number) {
@@ -136,7 +158,7 @@ export async function addComment(postId: number, userId: number, text: string) {
   return result;
 }
 
-export async function getPostComments(postId: number) {
+export async function getPostComments(postId: number, limit: number = 50, offset: number = 0) {
   const db = await getDb();
   if (!db) return [];
 
@@ -148,7 +170,9 @@ export async function getPostComments(postId: number) {
     .from(comments)
     .leftJoin(users, eq(comments.userId, users.id))
     .where(eq(comments.postId, postId))
-    .orderBy(comments.createdAt);
+    .orderBy(desc(comments.createdAt))
+    .limit(limit)
+    .offset(offset);
 }
 
 // ========== FRIENDSHIP QUERIES ==========
