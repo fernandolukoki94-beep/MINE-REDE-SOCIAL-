@@ -5,17 +5,18 @@
 
 // Hash melhorado para passwords (utilizando salt e múltiplas iterações para maior segurança no LocalStorage)
 function hashPassword(password) {
-  // Nota: Na versão legacy usamos esta implementação melhorada. 
-  // Em fixes.js existe a hashPasswordImproved que é idêntica.
-  const salt = "mine-social-salt-2026";
+  // NOTA: Em ambiente de produção, o hash deve ser feito no BACKEND usando bcrypt ou Argon2.
+  // Esta implementação é uma simulação melhorada para fins educativos no LocalStorage.
+  const salt = "mine-social-secure-salt-2026-v2";
   let hash = password + salt;
-  for (let i = 0; i < 1000; i++) {
+  // Aumentar iterações para tornar ataques de força bruta mais lentos
+  for (let i = 0; i < 5000; i++) {
     let h = 0;
     for (let j = 0; j < hash.length; j++) {
       h = ((h << 5) - h) + hash.charCodeAt(j);
       h |= 0;
     }
-    hash = Math.abs(h).toString(16);
+    hash = Math.abs(h).toString(16) + i; // Adicionar índice para variar o hash interno
   }
   return hash;
 }

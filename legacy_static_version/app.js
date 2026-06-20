@@ -39,8 +39,10 @@ function filterWords(text) {
     filteredText = filteredText.replace(regex, '*'.repeat(word.length));
   });
   
-  // Destacar hashtags
-  filteredText = filteredText.replace(/#(\w+)/g, '<span class="hashtag" data-hashtag="$1">#$1</span>');
+  // Destacar hashtags (usando substituição segura para evitar injeção)
+  filteredText = filteredText.replace(/#(\w+)/g, (match, p1) => {
+    return `<span class="hashtag" data-hashtag="${sanitizeInput(p1)}">#${sanitizeInput(p1)}</span>`;
+  });
   return filteredText;
 }
 
@@ -207,7 +209,13 @@ function updateProfileUI() {
   
   const avatarDisplay = document.getElementById("userAvatarDisplay");
   if (currentUser.avatar) {
-    avatarDisplay.innerHTML = `<img src="${currentUser.avatar}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;" alt="Avatar">`;
+    // Usar criação de elemento DOM para segurança extra com a imagem base64
+    const img = document.createElement('img');
+    img.src = currentUser.avatar;
+    img.style.cssText = "width:100%; height:100%; border-radius:50%; object-fit:cover;";
+    img.alt = "Avatar";
+    avatarDisplay.innerHTML = "";
+    avatarDisplay.appendChild(img);
     avatarDisplay.style.backgroundColor = "transparent";
   } else {
     avatarDisplay.textContent = currentUser.username.charAt(0).toUpperCase();
@@ -290,7 +298,7 @@ function addCommentFromFeed(userId, postId) {
   const currentUser = getCurrentUser();
   if (!currentUser) return;
   
-  const input = document.getElementById(`comment-input-${userId}-${postId}`);
+  const input = document.getElementById(`comment-input-${CSS.escape(userId)}-${CSS.escape(postId)}`);
   const commentText = input.value.trim();
   
   if (!commentText) {
@@ -331,7 +339,7 @@ function handleCommentKeyFromFeed(event, userId, postId) {
 }
 
 function focusCommentFromFeed(userId, postId) {
-  document.getElementById(`comment-input-${userId}-${postId}`).focus();
+  document.getElementById(`comment-input-${CSS.escape(userId)}-${CSS.escape(postId)}`).focus();
 }
 
 // ========== GESTÃO DE MENSAGENS ==========
@@ -351,7 +359,7 @@ function loadMsgs() {
     html += `
       <div style="margin-bottom: 10px;">
         <div class="message">
-          <strong>${sanitizeInput(m.author)} • ${formatDate(m.timestamp)}</strong>
+          <strong>${sanitizeInput(m.author || "Anônimo")} • ${formatDate(m.timestamp)}</strong>
           <div>${filterWords(m.text)}</div>
         </div>
       </div>
@@ -620,17 +628,17 @@ function displayFriendRequests() {
       <div class="friend-item">
         <div class="friend-info">
           <div class="friend-avatar" style="background-color: ${getProfileColor(user.username)};">
-            ${user.username.charAt(0).toUpperCase()}
+            ${sanitizeInput(user.username.charAt(0).toUpperCase())}
           </div>
           <div class="friend-details">
             <div class="friend-name">${sanitizeInput(user.username)}</div>
             <div class="friend-bio">${sanitizeInput(user.bio || "Sem biografia")}</div>
           </div>
         </div>
-<div class="friend-actions">
-	          <button class="friend-btn btn-accept" data-from-user-id="${fromUserId}">✓ Aceitar</button>
-	          <button class="friend-btn btn-reject" data-from-user-id="${fromUserId}">✗ Rejeitar</button>
-	        </div>
+        <div class="friend-actions">
+          <button class="friend-btn btn-accept" data-from-user-id="${sanitizeInput(fromUserId)}">✓ Aceitar</button>
+          <button class="friend-btn btn-reject" data-from-user-id="${sanitizeInput(fromUserId)}">✗ Rejeitar</button>
+        </div>
       </div>
     `;
   }).join("");
@@ -655,14 +663,14 @@ function displayFriendsList() {
       <div class="friend-item">
         <div class="friend-info">
           <div class="friend-avatar" style="background-color: ${getProfileColor(user.username)};">
-            ${user.username.charAt(0).toUpperCase()}
+            ${sanitizeInput(user.username.charAt(0).toUpperCase())}
           </div>
           <div class="friend-details">
             <div class="friend-name">${sanitizeInput(user.username)}</div>
             <div class="friend-bio">${sanitizeInput(user.bio || "Sem biografia")}</div>
           </div>
         </div>
-        <button class="friend-btn btn-remove" data-friend-id="${friendId}">Remover</button>
+        <button class="friend-btn btn-remove" data-friend-id="${sanitizeInput(friendId)}">Remover</button>
       </div>
     `;
   }).join("");
@@ -702,8 +710,23 @@ function loadPostsWithFriends(searchTerm = "") {
   postsWithScore.sort((a, b) => {
     const scoreDiff = b.score - a.score;
     if (scoreDiff !== 0) return scoreDiff;
-    const timeA = new Date(a.timestamp).getTime();
-    const timeB = new Date(b.timestamp).getTime();
+    
+    const parseDate = (str) => {
+      if (!str) return 0;
+      let d = new Date(str);
+      if (!isNaN(d.getTime())) return d.getTime();
+      
+      try {
+        const [datePart, timePart] = str.split(', ');
+        const [day, month, year] = datePart.split('/');
+        return new Date(`${year}-${month}-${day}T${timePart}`).getTime();
+      } catch(e) {
+        return 0;
+      }
+    };
+
+    const timeA = parseDate(a.timestamp);
+    const timeB = parseDate(b.timestamp);
     return timeB - timeA;
   });
   
@@ -719,22 +742,24 @@ function loadPostsWithFriends(searchTerm = "") {
 
     const profileColor = getProfileColor(p.author);
     const initial = (p.author || "A").charAt(0).toUpperCase();
+    
+    // Escapar IDs para evitar quebra de seletores CSS
+    const safeUserId = CSS.escape(p.userId);
+    const safePostId = CSS.escape(p.id);
+    const commentInputId = `comment-input-${safeUserId}-${safePostId}`;
+
     // Renderização segura de avatar
     let avatarHtml = "";
     if (p.avatar) {
-      avatarHtml = `<img src="${p.avatar}" class="profile-pic" alt="Avatar">`;
+      avatarHtml = `<img src="${sanitizeInput(p.avatar)}" class="profile-pic" alt="Avatar">`;
     } else {
-      const div = document.createElement("div");
-      div.className = "profile-pic";
-      div.style.backgroundColor = profileColor;
-      div.textContent = initial;
-      avatarHtml = div.outerHTML;
+      avatarHtml = `<div class="profile-pic" style="background-color: ${profileColor}">${initial}</div>`;
     }
     
     const MAX_IMAGE_DATA_SIZE = 1024 * 1024;
-  const imageHtml = p.image && p.image.length < MAX_IMAGE_DATA_SIZE 
-    ? `<img src="${p.image}" alt="Post image" class="post-image" loading="lazy" onerror="this.style.display='none'">` 
-    : '';
+    const imageHtml = p.image && p.image.length < MAX_IMAGE_DATA_SIZE 
+      ? `<img src="${sanitizeInput(p.image)}" alt="Post image" class="post-image" loading="lazy" onerror="this.style.display='none'">` 
+      : '';
     
     const commentsHtml = (p.comments || []).map(c => `
       <div class="comment">
@@ -743,7 +768,7 @@ function loadPostsWithFriends(searchTerm = "") {
     `).join('');
 
     const isOwnPost = p.userId === currentUser.id;
-    const deleteButton = isOwnPost ? `<button class="action-btn btn-delete-post" data-user-id="${p.userId}" data-post-id="${p.id}" title="Eliminar">🗑️</button>` : '';
+    const deleteButton = isOwnPost ? `<button class="action-btn btn-delete-post" data-user-id="${sanitizeInput(p.userId)}" data-post-id="${sanitizeInput(p.id)}" title="Eliminar">🗑️</button>` : '';
     
     const isLiked = (p.likedBy || []).includes(currentUser.id);
 
@@ -760,18 +785,18 @@ function loadPostsWithFriends(searchTerm = "") {
         <div class="post-content">${filterWords(p.text)}</div>
         ${imageHtml}
         <div class="post-footer">
-<button class="action-btn btn-like ${isLiked ? 'liked' : ''}" data-user-id="${p.userId}" data-post-id="${p.id}">
-	            ${p.likes || 0} ❤️ Gosto
-	          </button>
-	          <button class="action-btn btn-focus-comment" data-user-id="${p.userId}" data-post-id="${p.id}">
-	            ${(p.comments || []).length} 💬 Comentar
-	          </button>
+          <button class="action-btn btn-like ${isLiked ? 'liked' : ''}" data-user-id="${sanitizeInput(p.userId)}" data-post-id="${sanitizeInput(p.id)}">
+            ${p.likes || 0} ❤️ Gosto
+          </button>
+          <button class="action-btn btn-focus-comment" data-user-id="${sanitizeInput(p.userId)}" data-post-id="${sanitizeInput(p.id)}">
+            ${(p.comments || []).length} 💬 Comentar
+          </button>
         </div>
         <div class="comments-section">
           ${commentsHtml}
           <div class="comment-input-container">
-<input type="text" placeholder="Escreve um comentário..." id="comment-input-${p.userId}-${p.id}" class="comment-input" data-user-id="${p.userId}" data-post-id="${p.id}">
-	            <button class="primary-btn btn-add-comment" style="width: auto; padding: 5px 15px;" data-user-id="${p.userId}" data-post-id="${p.id}">Postar</button>
+            <input type="text" placeholder="Escreve um comentário..." id="${commentInputId}" class="comment-input" data-user-id="${sanitizeInput(p.userId)}" data-post-id="${sanitizeInput(p.id)}">
+            <button class="primary-btn btn-add-comment" style="width: auto; padding: 5px 15px;" data-user-id="${sanitizeInput(p.userId)}" data-post-id="${sanitizeInput(p.id)}">Postar</button>
           </div>
         </div>
       </div>

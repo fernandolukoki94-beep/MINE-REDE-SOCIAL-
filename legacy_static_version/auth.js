@@ -90,7 +90,7 @@ function register() {
   const newUser = {
     id: Date.now().toString(),
     username: username,
-    passwordHash: hashPasswordImproved(password),
+    passwordHash: hashPassword(password),
     bio: bio || "",
     avatar: "",
     createdAt: new Date().toISOString(),
@@ -136,7 +136,7 @@ function login() {
   }
 
   // Comparar hash de password
-  const passwordHash = hashPasswordImproved(password);
+  const passwordHash = hashPassword(password);
   if (user.passwordHash !== passwordHash) {
     document.getElementById("loginPasswordError").textContent = "Palavra-passe incorreta.";
     return;
