@@ -78,9 +78,9 @@ async function addPost() {
       return;
     }
     
-    // Validar tamanho (máx 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      showNotification("A imagem não pode ter mais de 2MB.", "error");
+    // Validar tamanho (máx 1MB para posts)
+    if (file.size > 1 * 1024 * 1024) {
+      showNotification("A imagem não pode ter mais de 1MB.", "error");
       return;
     }
 
@@ -90,7 +90,8 @@ async function addPost() {
       savePost(currentUser, text, imageData);
       return;
     } catch (error) {
-      showNotification("Erro ao processar a imagem.", "error");
+      console.error('Erro ao processar a imagem:', error);
+      showNotification(`Erro ao processar a imagem: ${error?.message || 'Desconhecido'}`, "error");
       return;
     }
   }
@@ -99,7 +100,7 @@ async function addPost() {
 }
 
 function savePost(currentUser, text, imageData) {
-  const posts = JSON.parse(localStorage.getItem(`posts_${currentUser.id}`) || "[]");
+  const posts = safeJSONParse(`posts_${currentUser.id}`, []);
   
   const newPost = {
     id: Date.now().toString(),
@@ -125,20 +126,29 @@ function savePost(currentUser, text, imageData) {
 
 function deletePost(userId, postId) {
   const currentUser = getCurrentUser();
+  if (!currentUser) return;
+  
+  // Validar entrada
+  if (!userId || !postId) {
+    console.warn('deletePost: userId ou postId inválido', { userId, postId });
+    return;
+  }
+  
   if (userId !== currentUser.id) {
     showNotification("Não podes eliminar posts de outras pessoas!", "error");
     return;
   }
   
   if (confirm("Tens a certeza que queres eliminar esta publicação?")) {
-    const posts = JSON.parse(localStorage.getItem(`posts_${userId}`) || "[]");
+    const posts = safeJSONParse(`posts_${userId}`, []);
     const index = posts.findIndex(p => p.id === postId);
     
     if (index !== -1) {
       posts.splice(index, 1);
       localStorage.setItem(`posts_${userId}`, JSON.stringify(posts));
       showNotification("Publicação eliminada.", "info");
-      loadPostsWithFriends(document.getElementById("searchInput").value);
+      const searchInput = document.getElementById("searchInput");
+      loadPostsWithFriends(searchInput?.value || "");
     }
   }
 }
@@ -170,21 +180,22 @@ async function saveProfile() {
       return;
     }
     
-    if (avatarFile.size > 500 * 1024) {
-      showNotification("A imagem não pode ter mais de 500KB.", "error");
+    if (avatarFile.size > 300 * 1024) {
+      showNotification("A imagem de perfil não pode ter mais de 300KB.", "error");
       return;
     }
 
     try {
       avatarData = await fileToBase64(avatarFile);
     } catch (error) {
-      showNotification("Erro ao processar a imagem de perfil.", "error");
+      console.error('Erro ao processar a imagem de perfil:', error);
+      showNotification(`Erro ao processar a imagem de perfil: ${error?.message || 'Desconhecido'}`, "error");
       return;
     }
   }
 
   // Atualizar utilizador
-  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  const users = safeJSONParse("users", []);
   const userIndex = users.findIndex(u => u.id === currentUser.id);
   
   if (userIndex !== -1) {
@@ -269,14 +280,17 @@ function clearAll() {
 function toggleLikeFromFeed(userId, postId) {
   const currentUser = getCurrentUser();
   if (!currentUser) return;
+  
+  // Validar entrada
+  if (!userId || !postId) {
+    console.warn('toggleLikeFromFeed: userId ou postId inválido', { userId, postId });
+    return;
+  }
 
-  const posts = JSON.parse(localStorage.getItem(`posts_${userId}`) || "[]");
+  const posts = safeJSONParse(`posts_${userId}`, []);
   const post = posts.find(p => p.id === postId);
   
   if (!post) return;
-
-  // Inicializar array se necessário
-  if (!post.likedBy) post.likedBy = [];
   
   const likeIndex = post.likedBy.indexOf(currentUser.id);
   
@@ -289,7 +303,8 @@ function toggleLikeFromFeed(userId, postId) {
   }
   
   localStorage.setItem(`posts_${userId}`, JSON.stringify(posts));
-  loadPostsWithFriends(document.getElementById("searchInput").value);
+  const searchInput = document.getElementById("searchInput");
+  loadPostsWithFriends(searchInput?.value || "");
 }
 
 // ========== GESTÃO DE COMENTÁRIOS ==========
@@ -298,7 +313,18 @@ function addCommentFromFeed(userId, postId) {
   const currentUser = getCurrentUser();
   if (!currentUser) return;
   
+  // Validar entrada
+  if (!userId || !postId) {
+    console.warn('addCommentFromFeed: userId ou postId inválido', { userId, postId });
+    return;
+  }
+  
   const input = document.getElementById(`comment-input-${CSS.escape(userId)}-${CSS.escape(postId)}`);
+  if (!input) {
+    console.warn('addCommentFromFeed: elemento de input não encontrado');
+    return;
+  }
+  
   const commentText = input.value.trim();
   
   if (!commentText) {
@@ -311,12 +337,10 @@ function addCommentFromFeed(userId, postId) {
     return;
   }
 
-  const posts = JSON.parse(localStorage.getItem(`posts_${userId}`) || "[]");
+  const posts = safeJSONParse(`posts_${userId}`, []);
   const post = posts.find(p => p.id === postId);
   
   if (!post) return;
-
-  if (!post.comments) post.comments = [];
   
   post.comments.push({
     id: Date.now().toString(),
@@ -327,7 +351,8 @@ function addCommentFromFeed(userId, postId) {
   
   localStorage.setItem(`posts_${userId}`, JSON.stringify(posts));
   input.value = "";
-  loadPostsWithFriends(document.getElementById("searchInput").value);
+  const searchInput = document.getElementById("searchInput");
+  loadPostsWithFriends(searchInput?.value || "");
   showNotification("Comentário adicionado!", "success");
 }
 
@@ -348,12 +373,12 @@ function loadMsgs() {
   const currentUser = getCurrentUser();
   if (!currentUser) return;
   
-  const msgs = JSON.parse(localStorage.getItem(`msgs_${currentUser.id}`) || "[]");
+  const msgs = safeJSONParse(`msgs_${currentUser.id}`, []);
   const msgList = document.getElementById("msgList");
   let html = "";
 
-  // Mostrar últimas 50 mensagens
-  const recentMsgs = msgs.slice(-50);
+  // Mostrar últimas 100 mensagens
+  const recentMsgs = msgs.slice(-100);
   
   recentMsgs.forEach(m => {
     html += `
@@ -390,7 +415,7 @@ function addMsg() {
     return;
   }
 
-  const msgs = JSON.parse(localStorage.getItem(`msgs_${currentUser.id}`) || "[]");
+  const msgs = safeJSONParse(`msgs_${currentUser.id}`, []);
   
   msgs.push({
     id: Date.now().toString(),
@@ -399,8 +424,8 @@ function addMsg() {
     timestamp: new Date().toISOString()
   });
   
-  // Manter apenas as últimas 1000 mensagens
-  if (msgs.length > 1000) msgs.shift();
+  // Manter apenas as últimas 5000 mensagens
+  if (msgs.length > 5000) msgs.shift();
   
   localStorage.setItem(`msgs_${currentUser.id}`, JSON.stringify(msgs));
   input.value = "";
@@ -427,7 +452,7 @@ function getFriendRequests() {
   const currentUser = getCurrentUser();
   if (!currentUser) return [];
   
-  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  const users = safeJSONParse("users", []);
   const userIndex = users.findIndex(u => u.id === currentUser.id);
   return userIndex !== -1 ? (users[userIndex].friendRequests || []) : [];
 }
@@ -436,13 +461,13 @@ function getFriendsList() {
   const currentUser = getCurrentUser();
   if (!currentUser) return [];
   
-  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  const users = safeJSONParse("users", []);
   const userIndex = users.findIndex(u => u.id === currentUser.id);
   return userIndex !== -1 ? (users[userIndex].friends || []) : [];
 }
 
 function addFriendRequest(fromUserId, toUserId) {
-  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  const users = safeJSONParse("users", []);
   const toUserIndex = users.findIndex(u => u.id === toUserId);
   
   if (toUserIndex === -1) return;
@@ -461,7 +486,7 @@ function acceptFriendRequest(fromUserId) {
   const currentUser = getCurrentUser();
   if (!currentUser) return;
   
-  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  const users = safeJSONParse("users", []);
   const currentUserIndex = users.findIndex(u => u.id === currentUser.id);
   const fromUserIndex = users.findIndex(u => u.id === fromUserId);
   
@@ -490,7 +515,7 @@ function rejectFriendRequest(fromUserId) {
   const currentUser = getCurrentUser();
   if (!currentUser) return;
   
-  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  const users = safeJSONParse("users", []);
   const currentUserIndex = users.findIndex(u => u.id === currentUser.id);
   
   if (currentUserIndex === -1) return;
@@ -508,7 +533,7 @@ function removeFriend(friendId) {
   if (!currentUser) return;
   
   if (confirm("Tens a certeza que queres remover este amigo?")) {
-    const users = JSON.parse(localStorage.getItem("users") || "[]");
+    const users = safeJSONParse("users", []);
     const currentUserIndex = users.findIndex(u => u.id === currentUser.id);
     const friendIndex = users.findIndex(u => u.id === friendId);
     
@@ -554,7 +579,7 @@ function searchUsers() {
     return;
   }
   
-  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  const users = safeJSONParse("users", []);
   const friends = getFriendsList();
   
   const results = users.filter(u => 
@@ -618,7 +643,7 @@ function displayFriendRequests() {
     return;
   }
   
-  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  const users = safeJSONParse("users", []);
   
   requestsDiv.innerHTML = requests.map(fromUserId => {
     const user = users.find(u => u.id === fromUserId);
@@ -653,7 +678,7 @@ function displayFriendsList() {
     return;
   }
   
-  const users = JSON.parse(localStorage.getItem("users") || "[]");
+  const users = safeJSONParse("users", []);
   
   friendsDiv.innerHTML = friends.map(friendId => {
     const user = users.find(u => u.id === friendId);
@@ -686,14 +711,14 @@ function loadPostsWithFriends(searchTerm = "") {
   const allPosts = [];
   
   // Adicionar posts do utilizador atual
-  const myPosts = JSON.parse(localStorage.getItem(`posts_${currentUser.id}`) || "[]");
+  const myPosts = safeJSONParse(`posts_${currentUser.id}`, []);
   myPosts.forEach(post => {
     allPosts.push({...post, userId: currentUser.id});
   });
   
   // Adicionar posts dos amigos
   friends.forEach(friendId => {
-    const friendPosts = JSON.parse(localStorage.getItem(`posts_${friendId}`) || "[]");
+    const friendPosts = safeJSONParse(`posts_${friendId}`, []);
     friendPosts.forEach(post => {
       allPosts.push({...post, userId: friendId});
     });

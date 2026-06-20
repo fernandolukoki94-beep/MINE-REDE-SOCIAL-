@@ -249,6 +249,17 @@ async function resizeImage(base64Str, maxWidth = 800, maxHeight = 600) {
   });
 }
 
+// Parse seguro de JSON do localStorage
+function safeJSONParse(key, defaultValue = []) {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : defaultValue;
+  } catch (error) {
+    console.error(`Erro ao fazer parse de JSON para a chave "${key}":`, error);
+    return defaultValue;
+  }
+}
+
 // Fazer download de JSON
 function downloadJSON(data, filename) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
