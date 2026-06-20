@@ -13,8 +13,12 @@ const userSockets = new Map<number, Set<string>>();
 export function setupSocketIO(server: HTTPServer) {
   io = new SocketIOServer(server, {
     cors: {
-      origin: "*", // In production, this should be restricted
+      // In production, restrict to allowed origins
+      origin: process.env.NODE_ENV === "production" 
+        ? (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(",") : false)
+        : "*",
       methods: ["GET", "POST"],
+      credentials: true,
     },
     path: "/api/socket.io",
   });

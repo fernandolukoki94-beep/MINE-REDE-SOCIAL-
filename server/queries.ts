@@ -178,6 +178,15 @@ export async function acceptFriendRequest(fromId: number, userId: number) {
   const db = await getDb();
   if (!db) return;
 
+  // Verify that a pending request actually exists for this user
+  const request = await db
+    .select()
+    .from(friendships)
+    .where(and(eq(friendships.userId, userId), eq(friendships.friendId, fromId), eq(friendships.status, "pending")))
+    .limit(1);
+
+  if (request.length === 0) return;
+
   // Update incoming request to accepted
   await db
     .update(friendships)
@@ -389,11 +398,14 @@ export async function getNotifications(userId: number, limit: number = 20, offse
     .offset(offset);
 }
 
-export async function markNotificationAsRead(notificationId: number) {
+export async function markNotificationAsRead(notificationId: number, userId: number) {
   const db = await getDb();
   if (!db) return;
 
-  await db.update(notifications).set({ isRead: 1 }).where(eq(notifications.id, notificationId));
+  await db
+    .update(notifications)
+    .set({ isRead: 1 })
+    .where(and(eq(notifications.id, notificationId), eq(notifications.userId, userId)));
 }
 
 export async function getUnreadNotificationCount(userId: number) {

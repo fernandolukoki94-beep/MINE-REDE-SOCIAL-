@@ -515,9 +515,9 @@ export const notificationsRouter = router({
 
   markAsRead: protectedProcedure
     .input(z.object({ notificationId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       try {
-        await markNotificationAsRead(input.notificationId);
+        await markNotificationAsRead(input.notificationId, ctx.user.id);
         return { success: true };
       } catch (error) {
         throw new TRPCError({
