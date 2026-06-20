@@ -161,5 +161,5 @@ Para continuar a elevar o projeto a um nível ainda mais industrial, as seguinte
 
 ---
 
-**Autor:** Manus AI
+**Autor:** fernandolukoki94@gmail.com 
 **Data:** 20 de Junho de 2026
