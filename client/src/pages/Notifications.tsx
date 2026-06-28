@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { Bell, Check, Heart, MessageCircle, UserPlus } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useInView } from "react-intersection-observer";
 import { useSocket } from "@/contexts/SocketContext";
 
 export default function Notifications() {
@@ -11,12 +12,32 @@ export default function Notifications() {
   const utils = trpc.useUtils();
   const { socket } = useSocket();
   const [offset, setOffset] = useState(0);
+  const [allNotifications, setAllNotifications] = useState<any[]>([]);
+  const { ref: loadMoreRef, inView } = useInView();
 
   // Fetch notifications
   const { data: notifications = [], isLoading } = trpc.notifications.list.useQuery({
     limit: 20,
     offset,
   });
+
+  // Accumulate notifications instead of replacing them
+  useEffect(() => {
+    if (notifications && notifications.length > 0) {
+      if (offset === 0) {
+        setAllNotifications(notifications);
+      } else {
+        setAllNotifications(prev => [...prev, ...notifications]);
+      }
+    }
+  }, [notifications, offset]);
+
+  // Auto-load more when reaching bottom
+  useEffect(() => {
+    if (inView && notifications.length === 20 && !isLoading) {
+      setOffset(prev => prev + 20);
+    }
+  }, [inView, notifications.length, isLoading]);
 
   // Mark as read mutation
   const markAsReadMutation = trpc.notifications.markAsRead.useMutation({
@@ -83,15 +104,15 @@ export default function Notifications() {
 
       {/* Notifications List */}
       <div className="space-y-3">
-        {isLoading ? (
+        {isLoading && offset === 0 ? (
           <div className="text-center py-8">A carregar notificações...</div>
-        ) : notifications.length === 0 ? (
+        ) : allNotifications.length === 0 ? (
           <Card className="p-8 text-center text-gray-500">
             <Bell className="w-12 h-12 mx-auto mb-3 opacity-50" />
             <p>Sem notificações</p>
           </Card>
         ) : (
-          notifications.map((notification: any) => (
+          allNotifications.map((notification: any) => (
             <Card
               key={notification.id}
               className={`p-4 flex items-start gap-4 cursor-pointer hover:shadow-md transition ${
@@ -131,15 +152,19 @@ export default function Notifications() {
       </div>
 
       {/* Load More */}
-      {notifications.length > 0 && notifications.length % 20 === 0 && (
-        <div className="mt-6 text-center">
+      {allNotifications.length > 0 && notifications.length === 20 && (
+        <div ref={loadMoreRef} className="mt-6 text-center">
           <Button
             variant="outline"
             onClick={() => setOffset((prev) => prev + 20)}
+            disabled={isLoading}
           >
-            Carregar mais
+            {isLoading ? "A carregar..." : "Carregar mais"}
           </Button>
         </div>
+      )}
+      {isLoading && offset > 0 && (
+        <div className="mt-6 text-center text-gray-500">A carregar mais notificacoes...</div>
       )}
     </div>
   );

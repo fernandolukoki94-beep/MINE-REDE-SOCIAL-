@@ -16,11 +16,15 @@ export const appRouter = router({
     me: publicProcedure.query(opts => opts.ctx.user),
     register: publicProcedure
       .input(z.object({
-        username: z.string().min(3).max(20),
-        password: z.string().min(6),
-        name: z.string().optional(),
+        username: z.string().min(3).max(20).trim(),
+        password: z.string().min(6).max(128),
+        name: z.string().max(100).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
+        // Validate username format (alphanumeric and underscore only)
+        if (!/^[a-zA-Z0-9_]+$/.test(input.username)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Username can only contain letters, numbers, and underscores" });
+        }
         const existingUser = await getUserByOpenId(input.username);
         if (existingUser) {
           throw new TRPCError({ code: "CONFLICT", message: "User already exists" });
@@ -42,18 +46,25 @@ export const appRouter = router({
       }),
     login: publicProcedure
       .input(z.object({
-        username: z.string(),
-        password: z.string(),
+        username: z.string().min(1).max(20),
+        password: z.string().min(1).max(128),
       }))
       .mutation(async ({ input, ctx }) => {
-        const user = await getUserByOpenId(input.username);
+        // Trim input to prevent whitespace-only attacks
+        const username = input.username.trim();
+        const password = input.password.trim();
+        
+        if (!username || !password) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Username and password are required" });
+        }
+        const user = await getUserByOpenId(username);
         if (!user) {
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid credentials" });
         }
 
         // 1. Try bcrypt (new system)
         if (user.passwordHash && user.passwordHash.startsWith("$2")) {
-          const isValid = await bcrypt.compare(input.password, user.passwordHash);
+          const isValid = await bcrypt.compare(password, user.passwordHash);
           if (!isValid) {
             throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid credentials" });
           }

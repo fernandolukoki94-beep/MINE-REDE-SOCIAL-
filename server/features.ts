@@ -67,9 +67,12 @@ export const postsRouter = router({
     }),
 
   delete: protectedProcedure
-    .input(z.object({ postId: z.number() }))
+    .input(z.object({ postId: z.number().min(1) }))
     .mutation(async ({ ctx, input }) => {
       try {
+        if (input.postId < 1) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid post ID" });
+        }
         await queries.deletePost(input.postId, ctx.user.id);
         return { success: true };
       } catch (error) {
@@ -81,20 +84,26 @@ export const postsRouter = router({
     }),
 
   like: protectedProcedure
-    .input(z.object({ postId: z.number() }))
+    .input(z.object({ postId: z.number().min(1) }))
     .mutation(async ({ ctx, input }) => {
+      if (input.postId < 1) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid post ID" });
+      }
       return await PostService.toggleLike(input.postId, ctx.user.id, ctx.user.name || "");
     }),
 
   comments: protectedProcedure
     .input(
       z.object({
-        postId: z.number(),
+        postId: z.number().min(1),
         limit: z.number().min(1).max(100).default(20),
         offset: z.number().min(0).default(0),
       })
     )
     .query(async ({ input }) => {
+      if (input.postId < 1) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid post ID" });
+      }
       try {
         return await queries.getPostComments(input.postId, input.limit, input.offset);
       } catch (error) {
@@ -108,25 +117,37 @@ export const postsRouter = router({
   addComment: protectedProcedure
     .input(
       z.object({
-        postId: z.number(),
+        postId: z.number().min(1),
         text: z.string().min(1).max(500),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      if (input.postId < 1) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid post ID" });
+      }
       return await PostService.addComment(input.postId, ctx.user.id, ctx.user.name || "", input.text);
     }),
 
   uploadMedia: protectedProcedure
     .input(
       z.object({
-        file: z.string(), // base64 encoded
+        file: z.string().min(1), // base64 encoded
         type: z.enum(["image", "video"]),
-        filename: z.string(),
+        filename: z.string().min(1).max(255),
       })
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        // Validate base64 format
+        if (!input.file.match(/^[A-Za-z0-9+/=]+$/)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid base64 format" });
+        }
+        
         const buffer = Buffer.from(input.file, "base64");
+        
+        if (buffer.length === 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "File is empty" });
+        }
         
         if (buffer.length > MAX_FILE_SIZE) {
           throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "File size exceeds 5MB limit" });

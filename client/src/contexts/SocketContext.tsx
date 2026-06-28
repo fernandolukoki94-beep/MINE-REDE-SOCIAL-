@@ -17,9 +17,14 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (user) {
-      // Create socket connection
+      // Create socket connection with credentials for cookie-based auth
       const newSocket = io({
         path: "/api/socket.io",
+        withCredentials: true,
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 5,
       });
 
       newSocket.on("connect", () => {

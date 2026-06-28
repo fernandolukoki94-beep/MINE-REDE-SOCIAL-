@@ -47,8 +47,19 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarWidth, setSidebarWidth] = useState(() => {
-    const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
-    return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
+    try {
+      const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+      if (!saved) return DEFAULT_WIDTH;
+      const parsed = parseInt(saved, 10);
+      // Validate parsed value is a valid number within bounds
+      if (isNaN(parsed) || parsed < MIN_WIDTH || parsed > MAX_WIDTH) {
+        return DEFAULT_WIDTH;
+      }
+      return parsed;
+    } catch (error) {
+      console.error("Error reading sidebar width from localStorage:", error);
+      return DEFAULT_WIDTH;
+    }
   });
   const { loading, user } = useAuth();
 

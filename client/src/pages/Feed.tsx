@@ -75,20 +75,28 @@ export default function Feed() {
 
   useEffect(() => {
     if (postsData) {
-      setPosts((prev) => [...prev, ...postsData]);
+      if (offset === 0) {
+        // Reset posts when offset is 0 (refresh)
+        setPosts(postsData);
+      } else {
+        // Accumulate posts when paginating
+        setPosts((prev) => [...prev, ...postsData]);
+      }
     }
-  }, [postsData]);
+  }, [postsData, offset]);
 
   const handleLoadMore = () => {
-    setOffset((prev) => prev + 20);
+    if (postsData && postsData.length === 20 && !isLoading) {
+      setOffset((prev) => prev + 20);
+    }
   };
 
   // Load more posts when scrolling
   useEffect(() => {
-    if (inView) {
+    if (inView && postsData && postsData.length === 20 && !isLoading) {
       handleLoadMore();
     }
-  }, [inView]);
+  }, [inView, postsData, isLoading]);
 
   // Listen for real-time notifications to refresh feed if needed
   useEffect(() => {
