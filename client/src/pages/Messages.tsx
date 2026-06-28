@@ -24,7 +24,7 @@ export default function Messages() {
   );
 
   // Fetch unread count
-  const { data: unreadData } = trpc.messages.unreadCount.useQuery();
+  const { data: unreadCount = 0 } = trpc.messages.unreadCount.useQuery();
 
   // Send message mutation
   const sendMessageMutation = trpc.messages.send.useMutation({
@@ -73,8 +73,8 @@ export default function Messages() {
         <div className="border rounded-lg overflow-hidden flex flex-col">
           <div className="p-4 border-b bg-gray-50">
             <h2 className="font-semibold">Mensagens</h2>
-            {unreadData && unreadData.count > 0 && (
-              <p className="text-sm text-gray-500">{unreadData.count} não lidas</p>
+            {unreadCount > 0 && (
+              <p className="text-sm text-gray-500">{unreadCount} não lidas</p>
             )}
           </div>
 

@@ -11,6 +11,7 @@ import { storagePut } from "./storage";
 import { fileTypeFromBuffer } from "file-type";
 import * as queries from "./queries";
 import { PostService, FriendshipService, MessageService } from "./services";
+import * as cache from "./cache";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -82,7 +83,7 @@ export const postsRouter = router({
   like: protectedProcedure
     .input(z.object({ postId: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      return await PostService.toggleLike(input.postId, ctx.user.id, ctx.user.name);
+      return await PostService.toggleLike(input.postId, ctx.user.id, ctx.user.name || "");
     }),
 
   comments: protectedProcedure
@@ -112,7 +113,7 @@ export const postsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return await PostService.addComment(input.postId, ctx.user.id, ctx.user.name, input.text);
+      return await PostService.addComment(input.postId, ctx.user.id, ctx.user.name || "", input.text);
     }),
 
   uploadMedia: protectedProcedure
@@ -199,13 +200,13 @@ export const friendsRouter = router({
   sendRequest: protectedProcedure
     .input(z.object({ toUserId: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      return await FriendshipService.sendRequest(ctx.user.id, input.toUserId, ctx.user.name);
+      return await FriendshipService.sendRequest(ctx.user.id, input.toUserId, ctx.user.name || "");
     }),
 
   accept: protectedProcedure
     .input(z.object({ fromUserId: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      return await FriendshipService.acceptRequest(input.fromUserId, ctx.user.id, ctx.user.name);
+      return await FriendshipService.acceptRequest(input.fromUserId, ctx.user.id, ctx.user.name || "");
     }),
 
   reject: protectedProcedure
@@ -283,7 +284,7 @@ export const messagesRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return await MessageService.sendMessage(ctx.user.id, ctx.user.name, input.recipientId, input.text);
+      return await MessageService.sendMessage(ctx.user.id, ctx.user.name || "", input.recipientId, input.text);
     }),
 
   conversations: protectedProcedure.query(async ({ ctx }) => {
