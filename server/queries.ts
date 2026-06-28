@@ -43,6 +43,11 @@ export async function getPostsWithFriends(userId: number, limit: number = 20, of
   const db = await getDb();
   if (!db) return [];
 
+  // Validate inputs
+  if (userId < 1) return [];
+  if (limit < 1 || limit > 100) return [];
+  if (offset < 0) return [];
+
   // Get user's friends
   const friendshipsList = await db
     .select({ friendId: friendships.friendId })
@@ -95,6 +100,9 @@ export async function toggleLike(postId: number, userId: number) {
   const db = await getDb();
   if (!db) return { liked: false };
 
+  // Validate inputs
+  if (postId < 1 || userId < 1) return { liked: false };
+
   // Use a transaction to ensure consistency between postLikes table and posts.likes counter
   return await db.transaction(async (tx) => {
     const existing = await tx
@@ -113,7 +121,7 @@ export async function toggleLike(postId: number, userId: number) {
         .from(postLikes)
         .where(eq(postLikes.postId, postId));
       
-      const newCount = likeCountResult[0].count;
+      const newCount = likeCountResult[0]?.count || 0;
       await tx.update(posts).set({ likes: newCount }).where(eq(posts.id, postId));
       
       return { liked: false, likes: newCount };
@@ -127,7 +135,7 @@ export async function toggleLike(postId: number, userId: number) {
         .from(postLikes)
         .where(eq(postLikes.postId, postId));
       
-      const newCount = likeCountResult[0].count;
+      const newCount = likeCountResult[0]?.count || 0;
       await tx.update(posts).set({ likes: newCount }).where(eq(posts.id, postId));
       
       return { liked: true, likes: newCount };
@@ -138,6 +146,9 @@ export async function toggleLike(postId: number, userId: number) {
 export async function hasUserLiked(postId: number, userId: number) {
   const db = await getDb();
   if (!db) return false;
+
+  // Validate inputs
+  if (postId < 1 || userId < 1) return false;
 
   const result = await db
     .select()
@@ -161,6 +172,11 @@ export async function addComment(postId: number, userId: number, text: string) {
 export async function getPostComments(postId: number, limit: number = 50, offset: number = 0) {
   const db = await getDb();
   if (!db) return [];
+
+  // Validate inputs
+  if (postId < 1) return [];
+  if (limit < 1 || limit > 100) return [];
+  if (offset < 0) return [];
 
   return await db
     .select({
@@ -319,7 +335,7 @@ export async function getConversations(userId: number) {
 
   // Get unique conversations with last message info
   const conversations = await db
-    .selectDistinct({
+    .select({
       conversationWith: sql`CASE WHEN ${directMessages.senderId} = ${userId} THEN ${directMessages.recipientId} ELSE ${directMessages.senderId} END`,
       lastMessage: sql`MAX(${directMessages.createdAt})`,
     })
@@ -346,6 +362,11 @@ export async function getConversations(userId: number) {
 export async function getDirectMessages(userId: number, otherUserId: number, limit: number = 50, offset: number = 0) {
   const db = await getDb();
   if (!db) return [];
+
+  // Validate inputs
+  if (userId < 1 || otherUserId < 1 || userId === otherUserId) return [];
+  if (limit < 1 || limit > 100) return [];
+  if (offset < 0) return [];
 
   return await db
     .select({
@@ -409,6 +430,11 @@ export async function getNotifications(userId: number, limit: number = 20, offse
   const db = await getDb();
   if (!db) return [];
 
+  // Validate inputs
+  if (userId < 1) return [];
+  if (limit < 1 || limit > 100) return [];
+  if (offset < 0) return [];
+
   return await db
     .select({
       ...getTableColumns(notifications),
@@ -448,6 +474,13 @@ export async function searchUsers(searchTerm: string, excludeUserId: number, lim
   const db = await getDb();
   if (!db) return [];
 
+  // Validate inputs
+  if (!searchTerm || searchTerm.trim().length === 0) return [];
+  if (limit < 1 || limit > 100) return [];
+  if (excludeUserId < 1) return [];
+
+  const sanitizedTerm = searchTerm.trim().slice(0, 100);
+
   return await db
     .select({
       ...getTableColumns(users),
@@ -455,7 +488,7 @@ export async function searchUsers(searchTerm: string, excludeUserId: number, lim
     })
     .from(users)
     .leftJoin(userProfiles, eq(users.id, userProfiles.userId))
-    .where(and(sql`LOWER(${users.name}) LIKE LOWER(${`%${searchTerm}%`})`, sql`${users.id} != ${excludeUserId}`))
+    .where(and(sql`LOWER(${users.name}) LIKE LOWER(${`%${sanitizedTerm}%`})`, sql`${users.id} != ${excludeUserId}`))
     .limit(limit);
 }
 

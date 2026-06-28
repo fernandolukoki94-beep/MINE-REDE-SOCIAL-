@@ -1,9 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
-import * as PostService from "./services/PostService";
-import * as FriendshipService from "./services/FriendshipService";
-import * as MessageService from "./services/MessageService";
+import { PostService, FriendshipService, MessageService } from "./services";
+import * as queries from "./queries";
+import * as cache from "./cache";
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
@@ -35,28 +35,22 @@ function createAuthContext(userId: number = 1, userName: string = `User ${userId
 }
 
 // Mock services to isolate router logic
-vi.mock("./services/PostService", () => ({
+vi.mock("./services", () => ({
   PostService: {
     createPost: vi.fn(),
     toggleLike: vi.fn(),
     addComment: vi.fn(),
   },
-}));
-
-vi.mock("./services/FriendshipService", () => ({
   FriendshipService: {
     sendRequest: vi.fn(),
     acceptRequest: vi.fn(),
   },
-}));
-
-vi.mock("./services/MessageService", () => ({
   MessageService: {
     sendMessage: vi.fn(),
   },
 }));
 
-// Mock queries that are still directly called by routers (e.g., getPostsWithFriends, deletePost)
+// Mock queries that are still directly called by routers
 vi.mock("./queries", () => ({
   getPostsWithFriends: vi.fn(),
   hasUserLiked: vi.fn(),
@@ -80,6 +74,14 @@ vi.mock("./queries", () => ({
   clearUserData: vi.fn(),
 }));
 
+// Mock cache functions
+vi.mock("./cache", () => ({
+  getCachedFeed: vi.fn(),
+  setCachedFeed: vi.fn(),
+  invalidateFeedCache: vi.fn(),
+  incrementLikeCounter: vi.fn(),
+}));
+
 describe("Posts Router", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -89,10 +91,10 @@ describe("Posts Router", () => {
     const { ctx } = createAuthContext(1, "Test User");
     const caller = appRouter.createCaller(ctx);
     const postData = { text: "My new post" };
-    vi.mocked(PostService.PostService.createPost).mockResolvedValueOnce({ success: true });
+    vi.mocked(PostService.createPost).mockResolvedValueOnce({ success: true });
 
     const result = await caller.posts.create(postData);
-    expect(PostService.PostService.createPost).toHaveBeenCalledWith(ctx.user.id, postData);
+    expect(PostService.createPost).toHaveBeenCalledWith(ctx.user.id, postData);
     expect(result).toEqual({ success: true });
   });
 
@@ -100,10 +102,10 @@ describe("Posts Router", () => {
     const { ctx } = createAuthContext(1, "Test User");
     const caller = appRouter.createCaller(ctx);
     const postId = 123;
-    vi.mocked(PostService.PostService.toggleLike).mockResolvedValueOnce({ liked: true, likes: 1 });
+    vi.mocked(PostService.toggleLike).mockResolvedValueOnce({ liked: true, likes: 1 });
 
     const result = await caller.posts.like({ postId });
-    expect(PostService.PostService.toggleLike).toHaveBeenCalledWith(postId, ctx.user.id, ctx.user.name);
+    expect(PostService.toggleLike).toHaveBeenCalledWith(postId, ctx.user.id, ctx.user.name);
     expect(result).toEqual({ liked: true, likes: 1 });
   });
 
@@ -112,18 +114,20 @@ describe("Posts Router", () => {
     const caller = appRouter.createCaller(ctx);
     const postId = 123;
     const commentText = "Great post!";
-    vi.mocked(PostService.PostService.addComment).mockResolvedValueOnce({ success: true });
+    vi.mocked(PostService.addComment).mockResolvedValueOnce({ success: true });
 
     const result = await caller.posts.addComment({ postId, text: commentText });
-    expect(PostService.PostService.addComment).toHaveBeenCalledWith(postId, ctx.user.id, ctx.user.name, commentText);
+    expect(PostService.addComment).toHaveBeenCalledWith(postId, ctx.user.id, ctx.user.name, commentText);
     expect(result).toEqual({ success: true });
   });
 
   it("should fetch feed posts", async () => {
     const { ctx } = createAuthContext(1);
     const caller = appRouter.createCaller(ctx);
+    vi.mocked(cache.getCachedFeed).mockResolvedValueOnce(null);
     vi.mocked(queries.getPostsWithFriends).mockResolvedValueOnce([]);
     vi.mocked(queries.hasUserLiked).mockResolvedValueOnce(false);
+    vi.mocked(cache.setCachedFeed).mockResolvedValueOnce(undefined);
 
     const result = await caller.posts.feed({ limit: 10, offset: 0 });
     expect(queries.getPostsWithFriends).toHaveBeenCalledWith(ctx.user.id, 10, 0);
@@ -150,10 +154,10 @@ describe("Friends Router", () => {
     const { ctx } = createAuthContext(1, "Test User");
     const caller = appRouter.createCaller(ctx);
     const toUserId = 2;
-    vi.mocked(FriendshipService.FriendshipService.sendRequest).mockResolvedValueOnce({ success: true });
+    vi.mocked(FriendshipService.sendRequest).mockResolvedValueOnce({ success: true });
 
     const result = await caller.friends.sendRequest({ toUserId });
-    expect(FriendshipService.FriendshipService.sendRequest).toHaveBeenCalledWith(ctx.user.id, toUserId, ctx.user.name);
+    expect(FriendshipService.sendRequest).toHaveBeenCalledWith(ctx.user.id, toUserId, ctx.user.name);
     expect(result).toEqual({ success: true });
   });
 
@@ -161,10 +165,10 @@ describe("Friends Router", () => {
     const { ctx } = createAuthContext(2, "Test User 2");
     const caller = appRouter.createCaller(ctx);
     const fromUserId = 1;
-    vi.mocked(FriendshipService.FriendshipService.acceptRequest).mockResolvedValueOnce({ success: true });
+    vi.mocked(FriendshipService.acceptRequest).mockResolvedValueOnce({ success: true });
 
     const result = await caller.friends.accept({ fromUserId });
-    expect(FriendshipService.FriendshipService.acceptRequest).toHaveBeenCalledWith(fromUserId, ctx.user.id, ctx.user.name);
+    expect(FriendshipService.acceptRequest).toHaveBeenCalledWith(fromUserId, ctx.user.id, ctx.user.name);
     expect(result).toEqual({ success: true });
   });
 
@@ -229,10 +233,10 @@ describe("Messages Router", () => {
     const caller = appRouter.createCaller(ctx);
     const recipientId = 2;
     const messageText = "Hello friend!";
-    vi.mocked(MessageService.MessageService.sendMessage).mockResolvedValueOnce({ success: true });
+    vi.mocked(MessageService.sendMessage).mockResolvedValueOnce({ success: true });
 
     const result = await caller.messages.send({ recipientId, text: messageText });
-    expect(MessageService.MessageService.sendMessage).toHaveBeenCalledWith(ctx.user.id, ctx.user.name, recipientId, messageText);
+    expect(MessageService.sendMessage).toHaveBeenCalledWith(ctx.user.id, ctx.user.name, recipientId, messageText);
     expect(result).toEqual({ success: true });
   });
 
