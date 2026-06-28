@@ -1,0 +1,10 @@
+feat: Auditoria completa e correção de erros
+
+- Corrigir DashboardLayout.tsx: Adicionar validação de localStorage e proteção contra NaN para sidebarWidth.
+- Corrigir ThemeContext.tsx: Adicionar validação de tema e proteção contra erros ao ler/escrever em localStorage.
+- Corrigir Notifications.tsx: Implementar paginação com acumulação de dados e infinite scroll.
+- Corrigir SocketContext.tsx: Adicionar `withCredentials: true` e melhorar configurações de reconexão para o socket.
+- Corrigir Feed.tsx: Adicionar acumulação de posts e melhorar a lógica de paginação para infinite scroll.
+- Corrigir routers.ts: Adicionar validação de entrada robusta para `register` e `login` (username, password, name, formato de username).
+- Corrigir features.ts: Adicionar validação de `postId` e `userId` em `delete`, `like`, `comments` e `addComment` mutations/queries.
+- Corrigir features.ts: Melhorar validação em `uploadMedia` (formato base64, tamanho do arquivo, tipo de arquivo).
