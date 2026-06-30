@@ -1,19 +1,30 @@
 # Build stage
 FROM node:22-alpine AS builder
 
+# Instalar dependências de sistema para pacotes nativos (bcrypt, sharp, etc)
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    gcc \
+    libc-dev
+
 WORKDIR /app
 
-# Copy package files, patches and config
+# Instalar pnpm globalmente
+RUN npm install -g pnpm@11.9.0
+
+# Copiar ficheiros de configuração primeiro para cache de layers
 COPY package.json pnpm-lock.yaml .npmrc ./
 COPY patches ./patches
 
-# Install pnpm and dependencies
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
+# Instalar todas as dependências (incluindo dev) para o build
+RUN pnpm install --frozen-lockfile
 
-# Copy source code
+# Copiar o resto do código
 COPY . .
 
-# Build application
+# Build do frontend e backend
 RUN pnpm build
 
 # Production stage
@@ -21,26 +32,29 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm
+# Instalar pnpm
+RUN npm install -g pnpm@11.9.0
 
-# Copy package files, patches and config
+# Copiar apenas ficheiros necessários para produção
 COPY package.json pnpm-lock.yaml .npmrc ./
 COPY patches ./patches
 
-# Install production dependencies only
+# Instalar apenas dependências de produção
 RUN pnpm install --frozen-lockfile --prod
 
-# Copy built application from builder
-# Note: Vite builds all assets (including client) to dist/public/
+# Copiar o build do estágio anterior
 COPY --from=builder /app/dist ./dist
 
-# Expose port
+# Garantir que o diretório public existe para o servidor estático
+# Note: Vite build deve colocar os arquivos em dist/public
+RUN mkdir -p dist/public
+
+# Expor a porta padrão
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
+# Variáveis de ambiente padrão
+ENV NODE_ENV=production
+ENV PORT=3000
 
-# Start application
+# Comando para iniciar
 CMD ["node", "dist/index.js"]
